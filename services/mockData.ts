@@ -624,3 +624,61 @@ const enrichProposal = (
     totalValue
   };
 };
+
+export const createProcedure = async (name: string, categoryId: number): Promise<{ success: boolean; data?: Procedimento; error?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('procedimento')
+      .insert([
+        {
+          nome: name,
+          idcategoria: categoryId,
+          preco_avulso: 1,
+          preco_particular: 0,
+          preco_parceiro: 0,
+          preco_clientegama: 0,
+          preco_premium: 0,
+          preco_premium: 0
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { success: true, data: data as Procedimento };
+  } catch (e: any) {
+    console.error("Error creating procedure:", e.message);
+    return { success: false, error: e.message };
+  }
+};
+
+export const updateProcedureName = async (id: number, newName: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('procedimento')
+      .update({ nome: newName })
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error updating procedure name:", e.message);
+    return { success: false, error: e.message };
+  }
+};
+
+export const deleteProcedure = async (id: number): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('procedimento')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error deleting procedure:", e.message);
+    return { success: false, error: e.message };
+  }
+};
