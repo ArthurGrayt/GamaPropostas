@@ -302,6 +302,113 @@ export const updateItemDetails = async (
   }
 };
 
+export const deleteItem = async (proposalId: number, itemId: number): Promise<boolean> => {
+  try {
+    // 1. Delete the item from the itensproposta table
+    const { error: deleteError } = await supabase
+      .from('itensproposta')
+      .delete()
+      .eq('id', itemId);
+
+    if (deleteError) {
+      console.error(`Error deleting item ${itemId}:`, deleteError);
+      return false;
+    }
+
+    // 2. Update the proposal's itensproposta array
+    const { data: proposalData, error: fetchError } = await supabase
+      .from('proposta')
+      .select('itensproposta')
+      .eq('id', proposalId)
+      .single();
+
+    if (fetchError || !proposalData) {
+      console.error(`Error fetching proposal ${proposalId} to update items:`, fetchError);
+      return false;
+    }
+
+    const currentItems = proposalData.itensproposta || [];
+    const newItems = currentItems.filter((id: number) => id !== itemId);
+
+    const { error: updateError } = await supabase
+      .from('proposta')
+      .update({ itensproposta: newItems })
+      .eq('id', proposalId);
+
+    if (updateError) {
+      console.error(`Error updating proposal ${proposalId} items list:`, updateError);
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error(`Exception deleting item ${itemId}:`, e);
+    return false;
+  }
+};
+
+export const addItemToProposal = async (
+  proposalId: number,
+  itemData: {
+    procedimentoId: number;
+    quantidade: number;
+    preco: number;
+    data_para_entrega: string;
+  }
+): Promise<boolean> => {
+  try {
+    // 1. Create the new item in itensproposta
+    const { data: newItemData, error: insertError } = await supabase
+      .from('itensproposta')
+      .insert({
+        idprocedimento: itemData.procedimentoId,
+        quantidade: itemData.quantidade,
+        preco: itemData.preco,
+        data_para_entrega: itemData.data_para_entrega,
+      })
+      .select('id')
+      .single();
+
+    if (insertError || !newItemData) {
+      console.error('Error creating new item:', insertError);
+      return false;
+    }
+
+    const newItemId = newItemData.id;
+
+    // 2. Fetch current proposal items
+    const { data: proposalData, error: fetchError } = await supabase
+      .from('proposta')
+      .select('itensproposta')
+      .eq('id', proposalId)
+      .single();
+
+    if (fetchError || !proposalData) {
+      console.error(`Error fetching proposal ${proposalId} to add item:`, fetchError);
+      return false;
+    }
+
+    const currentItems = proposalData.itensproposta || [];
+    const newItemsList = [...currentItems, newItemId];
+
+    // 3. Update proposal with new item list
+    const { error: updateError } = await supabase
+      .from('proposta')
+      .update({ itensproposta: newItemsList })
+      .eq('id', proposalId);
+
+    if (updateError) {
+      console.error(`Error updating proposal ${proposalId} with new item:`, updateError);
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Exception adding item to proposal:', e);
+    return false;
+  }
+};
+
 
 export const updateProcedurePrice = async (
   procedureId: number,

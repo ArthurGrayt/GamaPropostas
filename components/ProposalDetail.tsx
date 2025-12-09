@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus } from '../types';
+import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill } from './UIComponents';
-import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2 } from 'lucide-react';
-import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal } from '../services/mockData';
+import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus } from 'lucide-react';
+import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
 interface Props {
@@ -67,6 +67,19 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Add Item State
+    const [isAddingItem, setIsAddingItem] = useState(false);
+    const [catalog, setCatalog] = useState<CatalogContext>({ modulos: [], categorias: [], procedimentos: [], clientes: [] });
+    const [newItemSearch, setNewItemSearch] = useState('');
+    const [selectedProcedure, setSelectedProcedure] = useState<Procedimento | null>(null);
+    const [newItemDetails, setNewItemDetails] = useState({
+        quantity: 1,
+        price: 0,
+        date: '',
+        isManualPrice: false
+    });
+    const [isSavingNewItem, setIsSavingNewItem] = useState(false);
 
 
     useEffect(() => {
@@ -174,6 +187,17 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         }
     };
 
+    const handleDeleteItem = async (itemId: number) => {
+        if (window.confirm('Tem certeza que deseja remover este item da proposta?')) {
+            const success = await deleteItem(proposal.id, itemId);
+            if (success) {
+                onUpdate();
+            } else {
+                alert('Falha ao remover o item. Tente novamente.');
+            }
+        }
+    };
+
     const handleDeleteProposal = async () => {
         if (window.confirm('ATENÇÃO: Esta ação é irreversível e apagará a proposta permanentemente. Deseja continuar?')) {
             setIsDeleting(true);
@@ -189,6 +213,36 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         }
     };
 
+
+    const handleOpenAddItem = async () => {
+        setIsAddingItem(true);
+        if (catalog.modulos.length === 0) {
+            const data = await fetchCatalogData();
+            setCatalog(data);
+        }
+    };
+
+    const handleAddItem = async () => {
+        if (!selectedProcedure) return;
+
+        setIsSavingNewItem(true);
+        const success = await addItemToProposal(proposal.id, {
+            procedimentoId: selectedProcedure.id,
+            quantidade: newItemDetails.quantity,
+            preco: newItemDetails.price,
+            data_para_entrega: newItemDetails.date || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0]
+        });
+
+        if (success) {
+            onUpdate();
+            setIsAddingItem(false);
+            setSelectedProcedure(null);
+            setNewItemDetails({ quantity: 1, price: 0, date: '', isManualPrice: false });
+        } else {
+            alert('Erro ao adicionar item.');
+        }
+        setIsSavingNewItem(false);
+    };
 
     const toggleModule = (modId: number) => {
         setExpandedModules(prev => ({ ...prev, [modId]: !prev[modId] }));
@@ -274,29 +328,139 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                         </div>
                     </GlassCard>
                     <GlassCard>
-                        <h3 className="text-sm font-bold uppercase text-zinc-400 tracking-wider mb-4">Ações</h3>
-                        <div className="flex flex-col gap-3">
-                            <ActionButton label="Aprovada" variant={currentStatus === 'APPROVED' ? 'primary' : 'neutral'} icon={<CheckCircle size={18} />} onClick={() => handleStatusChange('APPROVED')} />
-                            <ActionButton label="Reprovada" variant={currentStatus === 'REJECTED' ? 'danger' : 'neutral'} icon={<XCircle size={18} />} onClick={() => handleStatusChange('REJECTED')} />
-                            <ActionButton label="Pendente" variant="neutral" icon={<Clock size={18} />} onClick={() => handleStatusChange('PENDING')} />
+                        {!isAddingItem ? (
+                            <>
+                                <h3 className="text-sm font-bold uppercase text-zinc-400 tracking-wider mb-4">Ações</h3>
+                                <div className="flex flex-col gap-3">
+                                    <ActionButton label="Aprovada" variant={currentStatus === 'APPROVED' ? 'primary' : 'neutral'} icon={<CheckCircle size={18} />} onClick={() => handleStatusChange('APPROVED')} />
+                                    <ActionButton label="Reprovada" variant={currentStatus === 'REJECTED' ? 'danger' : 'neutral'} icon={<XCircle size={18} />} onClick={() => handleStatusChange('REJECTED')} />
+                                    <ActionButton label="Pendente" variant="neutral" icon={<Clock size={18} />} onClick={() => handleStatusChange('PENDING')} />
 
-                            <div className="w-full h-px bg-neutral-200 dark:bg-zinc-700/50 my-2"></div>
+                                    <div className="w-full h-px bg-neutral-200 dark:bg-zinc-700/50 my-2"></div>
 
-                            <ActionButton
-                                label={isGeneratingPdf ? 'Gerando...' : 'Gerar PDF'}
-                                variant="neutral"
-                                icon={isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                                onClick={handleGeneratePdf}
-                            />
-                            <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
-                            <ActionButton
-                                label={isDeleting ? 'Apagando...' : 'Apagar Proposta'}
-                                variant="danger"
-                                icon={isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                                onClick={handleDeleteProposal}
-                                disabled={isDeleting}
-                            />
-                        </div>
+                                    <ActionButton label="Adicionar Item" variant="neutral" icon={<Plus size={18} />} onClick={handleOpenAddItem} />
+
+                                    <ActionButton
+                                        label={isGeneratingPdf ? 'Gerando...' : 'Gerar PDF'}
+                                        variant="neutral"
+                                        icon={isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                                        onClick={handleGeneratePdf}
+                                    />
+                                    <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
+                                    <ActionButton
+                                        label={isDeleting ? 'Apagando...' : 'Apagar Proposta'}
+                                        variant="danger"
+                                        icon={isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                                        onClick={handleDeleteProposal}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <div className="animate-fade-in">
+                                <div className="flex justify-between items-center mb-4 border-b border-neutral-200 dark:border-white/10 pb-2">
+                                    <h3 className="text-sm font-bold uppercase text-zinc-400 tracking-wider">Adicionar Item</h3>
+                                    <button onClick={() => setIsAddingItem(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-zinc-500">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                {!selectedProcedure ? (
+                                    <div className="space-y-3">
+                                        <SearchBar value={newItemSearch} onChange={setNewItemSearch} placeholder="Buscar..." className="w-full text-sm" />
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                            {catalog.procedimentos
+                                                .filter(p => p.nome.toLowerCase().includes(newItemSearch.toLowerCase()))
+                                                .slice(0, 20)
+                                                .map(proc => (
+                                                    <div
+                                                        key={proc.id}
+                                                        onClick={() => {
+                                                            setSelectedProcedure(proc);
+                                                            setNewItemDetails({
+                                                                quantity: 1,
+                                                                price: proc.preco_avulso || proc.preco || 0,
+                                                                date: '',
+                                                                isManualPrice: false
+                                                            });
+                                                        }}
+                                                        className="p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors flex justify-between items-center group"
+                                                    >
+                                                        <div className="flex-1 min-w-0 mr-2">
+                                                            <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200 block truncate">{proc.nome}</span>
+                                                            <span className="text-xs text-zinc-500 font-mono">{(proc.preco_avulso || proc.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                                        </div>
+                                                        <Plus size={14} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </div>
+                                                ))
+                                            }
+                                            {catalog.procedimentos.length === 0 && <div className="text-center py-4 text-zinc-500 text-xs"><Loader2 className="animate-spin mx-auto mb-1" size={16} /> Carregando...</div>}
+                                            {catalog.procedimentos.length > 0 && catalog.procedimentos.filter(p => p.nome.toLowerCase().includes(newItemSearch.toLowerCase())).length === 0 && (
+                                                <div className="text-center py-4 text-zinc-400 text-xs">Nada encontrado.</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4 animate-slide-in">
+                                        <button
+                                            onClick={() => setSelectedProcedure(null)}
+                                            className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-white transition-colors"
+                                        >
+                                            <ArrowLeft size={12} /> Voltar
+                                        </button>
+
+                                        <div className="bg-stone-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-neutral-200 dark:border-white/5">
+                                            <h3 className="font-bold text-sm mb-0.5 text-zinc-900 dark:text-white leading-tight">{selectedProcedure.nome}</h3>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Quantidade</label>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => setNewItemDetails(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))} className="p-1.5 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
+                                                    <input
+                                                        type="number"
+                                                        value={newItemDetails.quantity}
+                                                        onChange={e => setNewItemDetails(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                                                        className="w-full text-center bg-transparent border-b border-zinc-200 dark:border-zinc-700 py-1 font-bold text-sm"
+                                                    />
+                                                    <button onClick={() => setNewItemDetails(prev => ({ ...prev, quantity: prev.quantity + 1 }))} className="p-1.5 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Preço (R$)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={newItemDetails.price}
+                                                    onChange={e => setNewItemDetails(prev => ({ ...prev, price: parseFloat(e.target.value) || 0, isManualPrice: true }))}
+                                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded p-2 text-sm"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Entrega</label>
+                                                <input
+                                                    type="date"
+                                                    value={newItemDetails.date}
+                                                    onChange={e => setNewItemDetails(prev => ({ ...prev, date: e.target.value }))}
+                                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded p-2 text-sm"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={handleAddItem}
+                                            disabled={!selectedProcedure || isSavingNewItem}
+                                            className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transition-all active:scale-95 mt-2"
+                                        >
+                                            {isSavingNewItem ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
+                                            <span>Adicionar</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </GlassCard>
                 </div>
 
@@ -320,7 +484,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
                     <div className="space-y-4">
                         <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Buscar procedimento, categoria ou módulo..." className="w-full" />
-                        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                        <div className="flex gap-2 flex-wrap pb-2">
                             <FilterPill label="Todos" isActive={activeItemFilter === 'ALL'} onClick={() => setActiveItemFilter('ALL')} count={items.length} />
                             {itemStatusKeys.map(status => (
                                 <FilterPill key={status} label={ITEM_STATUSES[status].label} isActive={activeItemFilter === status} onClick={() => setActiveItemFilter(status)} count={items.filter(i => i.status === status).length} />
@@ -468,6 +632,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                                             <button onClick={() => handleStartEditingItem(item)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500">
                                                                                 <Edit2 size={14} />
                                                                             </button>
+                                                                            <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-500 transition-colors">
+                                                                                <Trash2 size={14} />
+                                                                            </button>
                                                                             <div className="relative">
                                                                                 <button onClick={() => setOpenStatusMenu(openStatusMenu === item.uiKey ? null : item.uiKey)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors bg-white/50 dark:bg-black/50 border dark:border-white/10 ${statusInfo.color}`}>
                                                                                     <StatusIcon size={14} />
@@ -504,6 +671,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                     })}
                 </div>
             </div>
+
         </div>
     );
 };
