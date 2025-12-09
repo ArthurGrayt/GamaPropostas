@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill } from './UIComponents';
-import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus } from 'lucide-react';
-import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext } from '../services/mockData';
+import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil } from 'lucide-react';
+import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
 interface Props {
@@ -81,11 +82,17 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     });
     const [isSavingNewItem, setIsSavingNewItem] = useState(false);
 
+    // Edit Client State
+    const [isEditingClient, setIsEditingClient] = useState(false);
+    const [selectedClientId, setSelectedClientId] = useState<string>(String(proposal.cliente.id));
+    const [isSavingClient, setIsSavingClient] = useState(false);
+
 
     useEffect(() => {
         if (!proposal) return;
         setItems(proposal.itens || []);
         setCurrentStatus(proposal.status);
+        setSelectedClientId(String(proposal.cliente.id));
 
         if (proposal.itens && Array.isArray(proposal.itens) && proposal.itens.length > 0) {
             const initialExpanded: Record<number, boolean> = {};
@@ -97,6 +104,14 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
             setExpandedModules(initialExpanded);
         }
     }, [proposal]);
+
+    useEffect(() => {
+        const loadCatalog = async () => {
+            const data = await fetchCatalogData();
+            setCatalog(data);
+        };
+        loadCatalog();
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -216,32 +231,44 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
     const handleOpenAddItem = async () => {
         setIsAddingItem(true);
-        if (catalog.modulos.length === 0) {
-            const data = await fetchCatalogData();
-            setCatalog(data);
-        }
     };
 
     const handleAddItem = async () => {
         if (!selectedProcedure) return;
 
         setIsSavingNewItem(true);
-        const success = await addItemToProposal(proposal.id, {
-            procedimentoId: selectedProcedure.id,
-            quantidade: newItemDetails.quantity,
-            preco: newItemDetails.price,
-            data_para_entrega: newItemDetails.date || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0]
-        });
+        const success = await addItemToProposal(
+            proposal.id,
+            {
+                procedimentoId: selectedProcedure.id,
+                quantidade: newItemDetails.quantity,
+                preco: newItemDetails.price,
+                data_para_entrega: newItemDetails.date
+            }
+        );
+        setIsSavingNewItem(false);
 
         if (success) {
-            onUpdate();
             setIsAddingItem(false);
             setSelectedProcedure(null);
             setNewItemDetails({ quantity: 1, price: 0, date: '', isManualPrice: false });
+            onUpdate();
         } else {
             alert('Erro ao adicionar item.');
         }
-        setIsSavingNewItem(false);
+    };
+
+    const handleSaveClientChange = async () => {
+        if (!selectedClientId) return;
+        setIsSavingClient(true);
+        const success = await updateProposalClient(proposal.id, selectedClientId);
+        setIsSavingClient(false);
+        if (success.success) {
+            setIsEditingClient(false);
+            onUpdate();
+        } else {
+            alert('Erro ao atualizar cliente: ' + success.error);
+        }
     };
 
     const toggleModule = (modId: number) => {
@@ -313,14 +340,55 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="space-y-6 lg:col-span-1">
-                    <GlassCard className="flex flex-col items-center text-center py-10">
-                        <div className="mb-4 relative">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
-                            <Avatar src={proposal.cliente.avatar || ''} alt={proposal.cliente.nome || 'Cliente'} />
-                        </div>
-                        <h2 className="text-xl font-bold text-zinc-800 dark:text-white mb-1">{proposal.cliente.nome || 'Cliente Desconhecido'}</h2>
-                        {proposal.cliente.razao_social && proposal.cliente.razao_social !== proposal.cliente.nome && <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium mb-1">{proposal.cliente.razao_social}</p>}
-                        <p className="text-xs text-zinc-400 font-mono mt-1">{proposal.cliente.id !== 'unknown' ? 'Cliente Verificado' : 'Cliente Não Encontrado'}</p>
+                    <GlassCard className="flex flex-col items-center text-center py-10 relative group">
+                        {!isEditingClient ? (
+                            <>
+                                <button
+                                    onClick={() => setIsEditingClient(true)}
+                                    className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                                    title="Alterar Cliente"
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                                <div className="mb-4 relative">
+                                    <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
+                                    <Avatar src={proposal.cliente.avatar || ''} alt={proposal.cliente.nome || 'Cliente'} />
+                                </div>
+                                <h2 className="text-xl font-bold text-zinc-800 dark:text-white mb-1">{proposal.cliente.nome || 'Cliente Desconhecido'}</h2>
+                                {proposal.cliente.razao_social && proposal.cliente.razao_social !== proposal.cliente.nome && <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium mb-1">{proposal.cliente.razao_social}</p>}
+                                <p className="text-xs text-zinc-400 font-mono mt-1">{proposal.cliente.id !== 'unknown' ? 'Cliente Verificado' : 'Cliente Não Encontrado'}</p>
+                            </>
+                        ) : (
+                            <div className="w-full px-4 animate-fade-in">
+                                <h3 className="text-sm font-bold text-zinc-500 mb-3 uppercase tracking-wider">Selecionar Cliente</h3>
+                                <select
+                                    value={selectedClientId}
+                                    onChange={(e) => setSelectedClientId(e.target.value)}
+                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-blue-500/50 outline-none mb-4"
+                                >
+                                    {catalog.clientes.map(c => (
+                                        <option key={c.id} value={c.id}>{c.nome_fantasia || c.nome}</option>
+                                    ))}
+                                </select>
+                                <div className="flex gap-2 justify-center">
+                                    <button
+                                        onClick={handleSaveClientChange}
+                                        disabled={isSavingClient}
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                                    >
+                                        {isSavingClient ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                        Salvar
+                                    </button>
+                                    <button
+                                        onClick={() => setIsEditingClient(false)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg font-medium transition-colors"
+                                    >
+                                        <X size={16} />
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div className="w-full h-px bg-neutral-200 dark:bg-zinc-700/50 my-6"></div>
                         <div className="w-full flex justify-between px-4 mb-2">
                             <span className="text-zinc-500">Valor Total</span>

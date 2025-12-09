@@ -682,3 +682,18 @@ export const deleteProcedure = async (id: number): Promise<{ success: boolean; e
     return { success: false, error: e.message };
   }
 };
+
+export const updateProposalClient = async (proposalId: number, newClientId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('proposta')
+      .update({ idcliente: newClientId })
+      .eq('id', proposalId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error updating proposal client:", e.message);
+    return { success: false, error: e.message };
+  }
+};
