@@ -15,7 +15,7 @@ const App: React.FC = () => {
   const [proposals, setProposals] = useState<EnrichedProposal[]>([]);
   const [selectedProposal, setSelectedProposal] = useState<EnrichedProposal | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  
+
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -52,7 +52,7 @@ const App: React.FC = () => {
         // We can find it in the list first for instant navigation, then re-fetch for freshness if needed
         const found = proposals.find(p => p.id === selectedId);
         if (found) setSelectedProposal(found);
-        
+
         // Fetch fresh detail
         const detail = await getProposalById(selectedId);
         if (detail) setSelectedProposal(detail);
@@ -65,11 +65,11 @@ const App: React.FC = () => {
     setIsLoading(true);
     const data = await getProposals();
     setProposals(data);
-    
+
     // Also refresh detail if we are looking at one
     if (selectedId) {
-       const detail = await getProposalById(selectedId);
-       if (detail) setSelectedProposal(detail);
+      const detail = await getProposalById(selectedId);
+      if (detail) setSelectedProposal(detail);
     }
     setIsLoading(false);
   };
@@ -89,7 +89,7 @@ const App: React.FC = () => {
     setView('CREATE');
     setSelectedId(null);
   };
-  
+
   const navigateToSettings = () => {
     setView('SETTINGS');
     setSelectedId(null);
@@ -102,33 +102,33 @@ const App: React.FC = () => {
 
   const handleQuickStatusUpdate = async (id: number, newStatus: ProposalStatus) => {
     // 1. Optimistic Update (Immediate UI feedback)
-    setProposals(prev => prev.map(p => 
+    setProposals(prev => prev.map(p =>
       p.id === id ? { ...p, status: newStatus } : p
     ));
 
     // 2. Persist to Backend
     await updateProposalStatus(id, newStatus);
-    
+
     // 3. Optional: Refresh strictly to ensure consistency, 
     // but usually optimistic is enough for this interaction.
     // If detail is open, update it too
     if (selectedProposal && selectedProposal.id === id) {
-        setSelectedProposal({ ...selectedProposal, status: newStatus });
+      setSelectedProposal({ ...selectedProposal, status: newStatus });
     }
   };
 
   return (
     <div className="min-h-screen text-zinc-800 dark:text-zinc-100 font-sans selection:bg-blue-500/30 transition-colors duration-500">
-        {/* Abstract Background Blobs */}
-        <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-400/20 rounded-full blur-[120px] animate-pulse-slow"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-400/20 rounded-full blur-[120px] animate-pulse-slow delay-1000"></div>
-            <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-pink-400/20 rounded-full blur-[100px] animate-pulse-slow delay-700"></div>
-        </div>
+      {/* Abstract Background Blobs */}
+      <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-400/20 rounded-full blur-[120px] animate-pulse-slow"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-400/20 rounded-full blur-[120px] animate-pulse-slow delay-1000"></div>
+        <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-pink-400/20 rounded-full blur-[100px] animate-pulse-slow delay-700"></div>
+      </div>
 
       <main className={
-          view === 'CREATE' || view === 'SETTINGS'
-          ? 'h-screen' 
+        view === 'CREATE' || view === 'SETTINGS'
+          ? 'h-screen'
           : 'px-4 sm:px-6 lg:px-8 pt-12 min-h-screen'
       }>
         {isLoading && proposals.length === 0 ? (
@@ -137,9 +137,9 @@ const App: React.FC = () => {
             <p className="animate-pulse">Carregando dados da nuvem...</p>
           </div>
         ) : view === 'LIST' ? (
-          <ProposalList 
-            proposals={proposals} 
-            onSelect={navigateToDetail} 
+          <ProposalList
+            proposals={proposals}
+            onSelect={navigateToDetail}
             onStatusChange={handleQuickStatusUpdate}
             isDarkMode={isDarkMode}
             onToggleTheme={toggleTheme}
@@ -147,7 +147,7 @@ const App: React.FC = () => {
             onNavigateToSettings={navigateToSettings}
           />
         ) : view === 'CREATE' ? (
-          <ProposalCreate 
+          <ProposalCreate
             onBack={navigateToList}
             onSuccess={handleCreateSuccess}
           />
@@ -157,8 +157,8 @@ const App: React.FC = () => {
           />
         ) : (
           selectedProposal && (
-            <ProposalDetail 
-              proposal={selectedProposal} 
+            <ProposalDetail
+              proposal={selectedProposal}
               onBack={navigateToList}
               onUpdate={refreshData}
             />
