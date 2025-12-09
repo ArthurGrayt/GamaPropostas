@@ -638,7 +638,7 @@ export const createProcedure = async (name: string, categoryId: number): Promise
           preco_parceiro: 0,
           preco_clientegama: 0,
           preco_premium: 0,
-          preco_premium: 0
+
         }
       ])
       .select()
@@ -694,6 +694,47 @@ export const updateProposalClient = async (proposalId: number, newClientId: stri
     return { success: true };
   } catch (e: any) {
     console.error("Error updating proposal client:", e.message);
+    return { success: false, error: e.message };
+  }
+};
+
+export const createNewClient = async (
+  name: string,
+  email?: string,
+  phone?: string,
+  proposalId?: number
+): Promise<{ success: boolean; data?: Client; error?: string }> => {
+  try {
+    const payload: any = {
+      nome_fantasia: name,
+      email: email || null,
+      telefone: phone || null,
+      clientefrequente: false,
+    };
+
+    if (proposalId) {
+      payload.cliente_propostas = [proposalId];
+    }
+
+    const { data, error } = await supabase
+      .from('clientes')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const newClient: Client = {
+      id: data.id,
+      nome: data.nome_fantasia || data.razao_social || name,
+      nome_fantasia: data.nome_fantasia,
+      razao_social: data.razao_social,
+      avatar: data.avatar
+    };
+
+    return { success: true, data: newClient };
+  } catch (e: any) {
+    console.error("Error creating client:", e.message);
     return { success: false, error: e.message };
   }
 };

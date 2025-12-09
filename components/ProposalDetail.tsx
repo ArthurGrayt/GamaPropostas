@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento } from '../types';
-import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill } from './UIComponents';
+import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector } from './UIComponents';
 import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil } from 'lucide-react';
-import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient } from '../services/mockData';
+import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
 interface Props {
@@ -86,6 +86,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [isEditingClient, setIsEditingClient] = useState(false);
     const [selectedClientId, setSelectedClientId] = useState<string>(String(proposal.cliente.id));
     const [isSavingClient, setIsSavingClient] = useState(false);
+    const [isCreatingClient, setIsCreatingClient] = useState(false);
+    const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
+    const [isSavingNewClient, setIsSavingNewClient] = useState(false);
 
 
     useEffect(() => {
@@ -271,6 +274,43 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         }
     };
 
+    const handleCreateClient = async () => {
+        if (!newClientData.name.trim()) {
+            alert('O nome do cliente é obrigatório.');
+            return;
+        }
+
+        setIsSavingNewClient(true);
+        const result = await createNewClient(
+            newClientData.name,
+            newClientData.email,
+            newClientData.phone,
+            proposal.id
+        );
+        setIsSavingNewClient(false);
+
+        if (result.success && result.data) {
+            // Update catalog locally to include the new client immediately
+            setCatalog(prev => ({
+                ...prev,
+                clientes: [...prev.clientes, result.data!]
+            }));
+
+            // Select the new client
+            setSelectedClientId(String(result.data.id));
+
+            // Close modal
+            setIsCreatingClient(false);
+            setNewClientData({ name: '', email: '', phone: '' });
+
+            // Since createNewClient already linked the proposal, we can just refresh
+            onUpdate();
+            setIsEditingClient(false); // Exit edit mode as well since we're done
+        } else {
+            alert('Erro ao criar cliente: ' + result.error);
+        }
+    };
+
     const toggleModule = (modId: number) => {
         setExpandedModules(prev => ({ ...prev, [modId]: !prev[modId] }));
     };
@@ -361,15 +401,13 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                         ) : (
                             <div className="w-full px-4 animate-fade-in">
                                 <h3 className="text-sm font-bold text-zinc-500 mb-3 uppercase tracking-wider">Selecionar Cliente</h3>
-                                <select
-                                    value={selectedClientId}
-                                    onChange={(e) => setSelectedClientId(e.target.value)}
-                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-blue-500/50 outline-none mb-4"
-                                >
-                                    {catalog.clientes.map(c => (
-                                        <option key={c.id} value={c.id}>{c.nome_fantasia || c.nome}</option>
-                                    ))}
-                                </select>
+                                <ClientSelector
+                                    clients={catalog.clientes}
+                                    selectedClientId={selectedClientId}
+                                    onSelect={setSelectedClientId}
+                                    onCreateNew={() => setIsCreatingClient(true)}
+                                    className="mb-4"
+                                />
                                 <div className="flex gap-2 justify-center">
                                     <button
                                         onClick={handleSaveClientChange}
@@ -740,6 +778,57 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                 </div>
             </div>
 
+            {isCreatingClient && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
+                        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
+                            <h3 className="font-bold text-zinc-800 dark:text-white">Novo Cliente</h3>
+                            <button onClick={() => setIsCreatingClient(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
+                                <input
+                                    type="text"
+                                    value={newClientData.name}
+                                    onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                    placeholder="Nome do Cliente ou Empresa"
+                                    autoFocus
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Email</label>
+                                <input
+                                    type="email"
+                                    value={newClientData.email}
+                                    onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
+                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                    placeholder="email@exemplo.com"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Telefone</label>
+                                <input
+                                    type="tel"
+                                    value={newClientData.phone}
+                                    onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
+                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                    placeholder="(00) 00000-0000"
+                                />
+                            </div>
+                            <button
+                                onClick={handleCreateClient}
+                                disabled={isSavingNewClient || !newClientData.name.trim()}
+                                className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                            >
+                                {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                                Criar Cliente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { CatalogContext, fetchCatalogData, createProposal } from '../services/mockData';
-import { GlassCard, SearchBar, FilterPill, cn } from './UIComponents';
+import { CatalogContext, fetchCatalogData, createProposal, createNewClient } from '../services/mockData';
+import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
 import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight } from 'lucide-react';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
 
@@ -17,25 +17,25 @@ type RenderNode = {
 type PriceTierKey = 'preco_avulso' | 'preco_particular' | 'preco_parceiro' | 'preco_clientegama' | 'preco_premium';
 
 const priceTiers: Record<PriceTierKey, string> = {
-    preco_avulso: 'Avulso',
-    preco_particular: 'Particular',
-    preco_parceiro: 'Parceiro',
-    preco_clientegama: 'Cliente Gama',
-    preco_premium: 'Premium',
+  preco_avulso: 'Avulso',
+  preco_particular: 'Particular',
+  preco_parceiro: 'Parceiro',
+  preco_clientegama: 'Cliente Gama',
+  preco_premium: 'Premium',
 };
 
 type SelectedItemState = {
-    quantity: number;
-    priceTier: PriceTierKey;
-    manualPrice?: number;
+  quantity: number;
+  priceTier: PriceTierKey;
+  manualPrice?: number;
 };
 
 type SummaryItem = {
-    procedimento: Procedimento;
-    quantity: number;
-    priceTier: PriceTierKey;
-    unitPrice: number;
-    manualPrice?: number;
+  procedimento: Procedimento;
+  quantity: number;
+  priceTier: PriceTierKey;
+  unitPrice: number;
+  manualPrice?: number;
 };
 
 
@@ -44,22 +44,27 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [submitting, setSubmitting] = useState(false);
   const [catalog, setCatalog] = useState<CatalogContext>({ modulos: [], categorias: [], procedimentos: [], clientes: [] });
   const [isCartOpen, setIsCartOpen] = useState(false);
-  
+
   const [openPriceMenu, setOpenPriceMenu] = useState<number | null>(null);
   const priceMenuRef = useRef<HTMLDivElement>(null);
   const [openSidebarPriceMenu, setOpenSidebarPriceMenu] = useState<number | null>(null);
   const sidebarPriceMenuRef = useRef<HTMLDivElement>(null);
-  
+
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedItemsMap, setSelectedItemsMap] = useState<Record<number, SelectedItemState>>({});
   const [deliveryDates, setDeliveryDates] = useState<Record<number, string>>({});
   const [globalDeliveryDate, setGlobalDeliveryDate] = useState('');
-  
+
   const [editingPrice, setEditingPrice] = useState<{ procId: number; price: string } | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeModuloId, setActiveModuloId] = useState<number | 'ALL'>('ALL');
   const [activeCategoriaId, setActiveCategoriaId] = useState<number | 'ALL'>('ALL');
+
+  // New Client State
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
+  const [isSavingNewClient, setIsSavingNewClient] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -74,19 +79,19 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   // Close price menu on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-        if (priceMenuRef.current && !priceMenuRef.current.contains(event.target as Node)) {
-            setOpenPriceMenu(null);
-        }
-        if (sidebarPriceMenuRef.current && !sidebarPriceMenuRef.current.contains(event.target as Node)) {
-            setOpenSidebarPriceMenu(null);
-        }
+      if (priceMenuRef.current && !priceMenuRef.current.contains(event.target as Node)) {
+        setOpenPriceMenu(null);
+      }
+      if (sidebarPriceMenuRef.current && !sidebarPriceMenuRef.current.contains(event.target as Node)) {
+        setOpenSidebarPriceMenu(null);
+      }
     };
-    
+
     if (openPriceMenu !== null || openSidebarPriceMenu !== null) {
-        document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [openPriceMenu, openSidebarPriceMenu]);
 
@@ -101,8 +106,8 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
           if (activeCategoriaId !== 'ALL' && cat.id !== activeCategoriaId) return;
           const procs = catalog.procedimentos.filter(p => {
             const query = searchQuery.toLowerCase();
-            return p.idcategoria === cat.id && (!query || 
-              p.nome.toLowerCase().includes(query) || 
+            return p.idcategoria === cat.id && (!query ||
+              p.nome.toLowerCase().includes(query) ||
               cat.nome.toLowerCase().includes(query) ||
               mod.nome.toLowerCase().includes(query));
           });
@@ -112,7 +117,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       return tree;
     }, []);
   }, [catalog, activeModuloId, activeCategoriaId, searchQuery]);
-  
+
   const summaryItems = useMemo((): SummaryItem[] => {
     return Object.keys(selectedItemsMap).map((procIdStr): SummaryItem | null => {
       const procId = parseInt(procIdStr, 10);
@@ -121,7 +126,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       if (!procedimento || !state) return null;
 
       const unitPrice = state.manualPrice ?? (procedimento[state.priceTier] ?? procedimento.preco_avulso ?? 0);
-      
+
       return {
         procedimento,
         quantity: state.quantity,
@@ -131,12 +136,12 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       };
     }).filter((i): i is SummaryItem => i !== null);
   }, [selectedItemsMap, catalog.procedimentos]);
-  
+
   const totalValue = useMemo(() => summaryItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0), [summaryItems]);
 
   const availableCategorias = useMemo(() => {
-      if (activeModuloId === 'ALL') return [];
-      return catalog.categorias.filter(c => c.idmodulo === activeModuloId);
+    if (activeModuloId === 'ALL') return [];
+    return catalog.categorias.filter(c => c.idmodulo === activeModuloId);
   }, [catalog.categorias, activeModuloId]);
 
   const handleItemSelect = (procId: number) => {
@@ -153,16 +158,16 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
   const handleItemQuantityChange = (procId: number, change: number) => {
     setSelectedItemsMap(prev => {
-        const newState = { ...prev };
-        if (newState[procId]) {
-            const newQuantity = newState[procId].quantity + change;
-            if (newQuantity <= 0) {
-                delete newState[procId];
-            } else {
-                newState[procId].quantity = newQuantity;
-            }
+      const newState = { ...prev };
+      if (newState[procId]) {
+        const newQuantity = newState[procId].quantity + change;
+        if (newQuantity <= 0) {
+          delete newState[procId];
+        } else {
+          newState[procId].quantity = newQuantity;
         }
-        return newState;
+      }
+      return newState;
     });
   };
 
@@ -171,39 +176,39 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     if (!proc) return;
 
     setSelectedItemsMap(prev => ({
-        ...prev,
-        [procId]: {
-            ...(prev[procId] || { quantity: 1, priceTier: 'preco_avulso' }),
-            priceTier: tier,
-            manualPrice: undefined,
-        }
+      ...prev,
+      [procId]: {
+        ...(prev[procId] || { quantity: 1, priceTier: 'preco_avulso' }),
+        priceTier: tier,
+        manualPrice: undefined,
+      }
     }));
     if (menu === 'main') setOpenPriceMenu(null);
     else setOpenSidebarPriceMenu(null);
   };
-  
+
   const handleSaveManualPrice = () => {
     if (!editingPrice) return;
     const { procId, price } = editingPrice;
     const newPrice = price === '' ? undefined : parseFloat(price);
 
     setSelectedItemsMap(prev => ({
-        ...prev,
-        [procId]: {
-            ...(prev[procId] || { quantity: 1, priceTier: 'preco_avulso' }),
-            manualPrice: newPrice,
-        }
+      ...prev,
+      [procId]: {
+        ...(prev[procId] || { quantity: 1, priceTier: 'preco_avulso' }),
+        manualPrice: newPrice,
+      }
     }));
     setEditingPrice(null);
   };
-  
+
   const handleApplyGlobalDate = () => {
-      if (!globalDeliveryDate) return;
-      const newDates: Record<number, string> = {};
-      Object.keys(selectedItemsMap).forEach(procId => {
-          newDates[Number(procId)] = globalDeliveryDate;
-      });
-      setDeliveryDates(newDates);
+    if (!globalDeliveryDate) return;
+    const newDates: Record<number, string> = {};
+    Object.keys(selectedItemsMap).forEach(procId => {
+      newDates[Number(procId)] = globalDeliveryDate;
+    });
+    setDeliveryDates(newDates);
   };
 
   const handleCreateProposal = async () => {
@@ -217,7 +222,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     }
 
     setSubmitting(true);
-    
+
     const itemsPayload = summaryItems.map(item => ({
       procedimentoId: item.procedimento.id,
       quantidade: item.quantity,
@@ -235,22 +240,55 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     }
   };
 
-  const PriceMenu: React.FC<{proc: Procedimento, menu: 'main' | 'sidebar'}> = ({proc, menu}) => {
-      const tiers = (Object.keys(priceTiers) as PriceTierKey[]).filter(key => proc[key] != null);
-      return(
-          <div ref={menu === 'main' ? priceMenuRef : sidebarPriceMenuRef} className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-zinc-800 rounded-lg shadow-2xl border dark:border-white/10 z-50 animate-fade-in p-1">
-              {tiers.map(tier => (
-                  <button key={tier} onClick={() => handlePriceTierSelect(proc.id, tier, menu)} className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white flex items-center justify-between gap-3 text-zinc-700 dark:text-zinc-200">
-                      <span>{priceTiers[tier]}</span>
-                      <span className="font-mono text-xs">{(proc[tier] || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                  </button>
-              ))}
-          </div>
-      );
+  const handleCreateClient = async () => {
+    if (!newClientData.name.trim()) {
+      alert('O nome do cliente é obrigatório.');
+      return;
+    }
+
+    setIsSavingNewClient(true);
+    const result = await createNewClient(
+      newClientData.name,
+      newClientData.email,
+      newClientData.phone,
+      undefined // No proposal ID yet
+    );
+    setIsSavingNewClient(false);
+
+    if (result.success && result.data) {
+      // Update catalog locally to include the new client immediately
+      setCatalog(prev => ({
+        ...prev,
+        clientes: [...prev.clientes, result.data!]
+      }));
+
+      // Select the new client
+      setSelectedClientId(String(result.data.id));
+
+      // Close modal
+      setIsCreatingClient(false);
+      setNewClientData({ name: '', email: '', phone: '' });
+    } else {
+      alert('Erro ao criar cliente: ' + result.error);
+    }
+  };
+
+  const PriceMenu: React.FC<{ proc: Procedimento, menu: 'main' | 'sidebar' }> = ({ proc, menu }) => {
+    const tiers = (Object.keys(priceTiers) as PriceTierKey[]).filter(key => proc[key] != null);
+    return (
+      <div ref={menu === 'main' ? priceMenuRef : sidebarPriceMenuRef} className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-zinc-800 rounded-lg shadow-2xl border dark:border-white/10 z-50 animate-fade-in p-1">
+        {tiers.map(tier => (
+          <button key={tier} onClick={() => handlePriceTierSelect(proc.id, tier, menu)} className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white flex items-center justify-between gap-3 text-zinc-700 dark:text-zinc-200">
+            <span>{priceTiers[tier]}</span>
+            <span className="font-mono text-xs">{(proc[tier] || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          </button>
+        ))}
+      </div>
+    );
   }
 
   if (loading) {
-      return (<div className="flex h-screen items-center justify-center text-zinc-500"><Loader2 className="animate-spin mr-2" /> Carregando catálogo...</div>);
+    return (<div className="flex h-screen items-center justify-center text-zinc-500"><Loader2 className="animate-spin mr-2" /> Carregando catálogo...</div>);
   }
 
   const CartSidebar = () => {
@@ -288,9 +326,9 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                 <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
               </div>
             </div>
-            <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><XIcon size={20}/></button>
+            <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><XIcon size={20} /></button>
           </div>
-          
+
           <div className="border-b dark:border-white/10 flex">
             <TabButton label="Itens" icon={ListTodo} isActive={activeTab === 'itens'} onClick={() => setActiveTab('itens')} />
             <TabButton label="Prazos" icon={CalendarClock} isActive={activeTab === 'prazos'} onClick={() => setActiveTab('prazos')} />
@@ -301,84 +339,84 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
               <div className="space-y-3">
                 {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
                 {summaryItems.map(item => (
-                    <div key={item.procedimento.id} className="p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10">
-                        <div className="flex-1">
-                            <p className="font-semibold text-sm">{item.procedimento.nome}</p>
-                            <div className="flex items-center gap-2 mt-1 relative">
-                                <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
-                                    <Tag size={12} />
-                                    <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
-                                </button>
-                                
-                                {editingPrice?.procId === item.procedimento.id ? (
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        value={editingPrice.price}
-                                        onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
-                                        onBlur={handleSaveManualPrice}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
-                                        className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
-                                        autoFocus
-                                    />
-                                ) : (
-                                    <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400"/></span>
-                                )}
-                                {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
-                            <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
-                            <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
-                            <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
-                        </div>
-                        <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
+                  <div key={item.procedimento.id} className="p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{item.procedimento.nome}</p>
+                      <div className="flex items-center gap-2 mt-1 relative">
+                        <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                          <Tag size={12} />
+                          <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
+                        </button>
+
+                        {editingPrice?.procId === item.procedimento.id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editingPrice.price}
+                            onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
+                            onBlur={handleSaveManualPrice}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
+                            className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                            autoFocus
+                          />
+                        ) : (
+                          <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400" /></span>
+                        )}
+                        {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
+                      </div>
                     </div>
+                    <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
+                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
+                      <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
+                    </div>
+                    <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
+                  </div>
                 ))}
               </div>
             )}
-            
+
             {activeTab === 'prazos' && (
               <div className="space-y-4">
-                  <div>
-                      <label className="block text-sm font-semibold mb-2 flex items-center gap-2"><CalendarPlus size={16} /> Data Global</label>
-                      <div className="flex gap-2">
-                          <input type="date" value={globalDeliveryDate} onChange={e => setGlobalDeliveryDate(e.target.value)} className="flex-1 w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none"/>
-                          <button onClick={handleApplyGlobalDate} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold">Aplicar</button>
-                      </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2 flex items-center gap-2"><CalendarPlus size={16} /> Data Global</label>
+                  <div className="flex gap-2">
+                    <input type="date" value={globalDeliveryDate} onChange={e => setGlobalDeliveryDate(e.target.value)} className="flex-1 w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none" />
+                    <button onClick={handleApplyGlobalDate} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold">Aplicar</button>
                   </div>
-                  <div className="space-y-2">
-                      <h3 className="font-semibold text-sm flex items-center gap-2"><ListTodo size={16} /> Datas Individuais</h3>
-                      {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Adicione itens para definir prazos.</p>}
-                      {summaryItems.map(item => (
-                          <div key={item.procedimento.id} className="flex items-center justify-between p-2 bg-white dark:bg-zinc-800/50 rounded-lg border dark:border-white/10">
-                              <p className="text-sm flex-1 pr-2 truncate">{item.procedimento.nome}</p>
-                              <input type="date" value={deliveryDates[item.procedimento.id] || ''} onChange={e => setDeliveryDates(prev => ({...prev, [item.procedimento.id]: e.target.value}))} className="bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"/>
-                          </div>
-                      ))}
-                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm flex items-center gap-2"><ListTodo size={16} /> Datas Individuais</h3>
+                  {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Adicione itens para definir prazos.</p>}
+                  {summaryItems.map(item => (
+                    <div key={item.procedimento.id} className="flex items-center justify-between p-2 bg-white dark:bg-zinc-800/50 rounded-lg border dark:border-white/10">
+                      <p className="text-sm flex-1 pr-2 truncate">{item.procedimento.nome}</p>
+                      <input type="date" value={deliveryDates[item.procedimento.id] || ''} onChange={e => setDeliveryDates(prev => ({ ...prev, [item.procedimento.id]: e.target.value }))} className="bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none" />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           <div className="p-4 mt-auto border-t border-white/20 dark:border-white/10">
-              <button
-                  onClick={handleCreateProposal}
-                  disabled={submitting || summaryItems.length === 0 || !selectedClientId}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold transition-all duration-200 active:scale-95 shadow-lg bg-blue-600/90 hover:bg-blue-500 text-white shadow-blue-500/30 disabled:bg-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
-              >
-                  {submitting ? (
-                      <>
-                          <Loader2 size={20} className="animate-spin" />
-                          <span>Salvando...</span>
-                      </>
-                  ) : (
-                      <>
-                          <Save size={20} />
-                          <span>Criar Proposta</span>
-                      </>
-                  )}
-              </button>
+            <button
+              onClick={handleCreateProposal}
+              disabled={submitting || summaryItems.length === 0 || !selectedClientId}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold transition-all duration-200 active:scale-95 shadow-lg bg-blue-600/90 hover:bg-blue-500 text-white shadow-blue-500/30 disabled:bg-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={20} />
+                  <span>Criar Proposta</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </>
@@ -387,106 +425,159 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
   return (
     <div className="animate-fade-in bg-stone-50 dark:bg-[#050505] h-screen flex flex-col relative overflow-hidden">
-        {/* Header */}
-        <div className="z-20 bg-stone-100/80 dark:bg-[#050505]/80 backdrop-blur-xl border-b border-neutral-200/50 dark:border-white/5 pb-4 px-4 pt-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
-                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><ArrowLeft /></button>
-                    <h1 className="text-xl font-bold">Nova Proposta</h1>
-                </div>
-                <button
-                    onClick={() => setIsCartOpen(true)}
-                    className="relative p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                    aria-label="Abrir resumo da proposta"
-                >
-                    <ShoppingCart className="text-zinc-700 dark:text-zinc-300"/>
-                    {summaryItems.length > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold ring-2 ring-stone-100 dark:ring-[#050505]">
-                            {summaryItems.reduce((acc, item) => acc + item.quantity, 0)}
-                        </span>
-                    )}
-                </button>
-            </div>
-            
-            <div className="flex flex-col md:flex-row items-center gap-3 mb-3">
-                <select
-                    value={selectedClientId}
-                    onChange={e => setSelectedClientId(e.target.value)}
-                    className="w-full md:w-2/3 h-12 rounded-2xl bg-white/80 dark:bg-zinc-800/50 backdrop-blur-md border border-neutral-200/50 dark:border-white/5 focus:ring-2 focus:ring-blue-500/50 focus:outline-none text-zinc-800 dark:text-white placeholder-zinc-400 shadow-sm transition-all px-4"
-                >
-                    {catalog.clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-                <SearchBar 
-                    value={searchQuery} 
-                    onChange={setSearchQuery} 
-                    placeholder="Buscar procedimento..." 
-                    className="w-full md:w-1/3"
-                />
-            </div>
-
-            <div className="space-y-2">
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
-                    <FilterPill label="Todos Módulos" isActive={activeModuloId === 'ALL'} onClick={() => { setActiveModuloId('ALL'); setActiveCategoriaId('ALL'); }} />
-                    {catalog.modulos.map(m => (<FilterPill key={m.id} label={m.nome} isActive={activeModuloId === m.id} onClick={() => { setActiveModuloId(m.id); setActiveCategoriaId('ALL'); }} />))}
-                </div>
-                {activeModuloId !== 'ALL' && availableCategorias.length > 0 && (
-                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4 animate-fade-in">
-                        <FilterPill label="Todas Categorias" isActive={activeCategoriaId === 'ALL'} onClick={() => setActiveCategoriaId('ALL')} />
-                        {availableCategorias.map(c => (<FilterPill key={c.id} label={c.nome} isActive={activeCategoriaId === c.id} onClick={() => setActiveCategoriaId(c.id)} />))}
-                    </div>
-                )}
-            </div>
+      {/* Header */}
+      <div className="z-20 bg-stone-100/80 dark:bg-[#050505]/80 backdrop-blur-xl border-b border-neutral-200/50 dark:border-white/5 pb-4 px-4 pt-6">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><ArrowLeft /></button>
+            <h1 className="text-xl font-bold">Nova Proposta</h1>
+          </div>
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="relative p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"
+            aria-label="Abrir resumo da proposta"
+          >
+            <ShoppingCart className="text-zinc-700 dark:text-zinc-300" />
+            {summaryItems.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold ring-2 ring-stone-100 dark:ring-[#050505]">
+                {summaryItems.reduce((acc, item) => acc + item.quantity, 0)}
+              </span>
+            )}
+          </button>
         </div>
-        
-        <main className="flex-1 overflow-y-auto pb-6">
-            <div className="px-4 space-y-6 mt-4 pb-4">
-                {!filteredTree.length && (<div className="text-center py-10 text-zinc-400"><p>Nenhum procedimento encontrado.</p></div>)}
-                {filteredTree.map(node => (
-                    <div key={node.modulo.id} className="space-y-3">
-                        <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold uppercase text-sm tracking-wider sticky top-0 z-10 bg-stone-100/90 dark:bg-[#050505]/90 backdrop-blur-xl py-3 -mx-4 px-4 border-b border-neutral-200/50 dark:border-white/5"><Layers size={16} />{node.modulo.nome}</div>
-                        {node.categorias.map(catNode => (
-                            <div key={catNode.data.id} className="space-y-3">
-                                <h3 className="text-sm font-semibold ml-2 flex items-center gap-2"><List size={14} /> {catNode.data.nome}</h3>
-                                {catNode.procedimentos.map(proc => {
-                                    const selected = selectedItemsMap[proc.id];
-                                    const unitPrice = selected?.manualPrice ?? (proc[selected?.priceTier || 'preco_avulso'] ?? proc.preco_avulso ?? 0);
 
-                                    return (
-                                    <GlassCard key={proc.id} className="p-4 shadow-md">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex-1 pr-4">
-                                                <h4 className="font-semibold mb-2">{proc.nome}</h4>
-                                                <div className="flex items-center gap-2 relative">
-                                                    <button onClick={() => setOpenPriceMenu(openPriceMenu === proc.id ? null : proc.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
-                                                        <Tag size={12} />
-                                                        <span>{selected?.manualPrice !== undefined ? 'Manual' : priceTiers[selected?.priceTier || 'preco_avulso']}</span>
-                                                    </button>
-                                                    <span className="font-mono text-sm text-zinc-700 dark:text-zinc-200 font-bold">{unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                                                    {openPriceMenu === proc.id && <PriceMenu proc={proc} menu="main" />}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                            {selected ? (
-                                                <>
-                                                    <button onClick={() => handleItemQuantityChange(proc.id, -1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-red-200 dark:hover:bg-red-800 text-red-600"><Minus size={16} /></button>
-                                                    <span className="w-8 text-center font-bold text-lg">{selected.quantity}</span>
-                                                    <button onClick={() => handleItemQuantityChange(proc.id, 1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-green-200 dark:hover:bg-green-800 text-green-600"><Plus size={16} /></button>
-                                                </>
-                                            ) : (
-                                                <button onClick={() => handleItemSelect(proc.id)} className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold text-sm">Adicionar</button>
-                                            )}
-                                            </div>
-                                        </div>
-                                    </GlassCard>
-                                )})}
-                            </div>
-                        ))}
-                    </div>
-                ))}
+        <div className="flex flex-col md:flex-row items-center gap-3 mb-3">
+          <ClientSelector
+            clients={catalog.clientes}
+            selectedClientId={selectedClientId}
+            onSelect={setSelectedClientId}
+            onCreateNew={() => setIsCreatingClient(true)}
+            className="w-full md:w-2/3"
+          />
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Buscar procedimento..."
+            className="w-full md:w-1/3"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+            <FilterPill label="Todos Módulos" isActive={activeModuloId === 'ALL'} onClick={() => { setActiveModuloId('ALL'); setActiveCategoriaId('ALL'); }} />
+            {catalog.modulos.map(m => (<FilterPill key={m.id} label={m.nome} isActive={activeModuloId === m.id} onClick={() => { setActiveModuloId(m.id); setActiveCategoriaId('ALL'); }} />))}
+          </div>
+          {activeModuloId !== 'ALL' && availableCategorias.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4 animate-fade-in">
+              <FilterPill label="Todas Categorias" isActive={activeCategoriaId === 'ALL'} onClick={() => setActiveCategoriaId('ALL')} />
+              {availableCategorias.map(c => (<FilterPill key={c.id} label={c.nome} isActive={activeCategoriaId === c.id} onClick={() => setActiveCategoriaId(c.id)} />))}
             </div>
-        </main>
-        
-        {isCartOpen && <CartSidebar />}
+          )}
+        </div>
+      </div>
+
+      <main className="flex-1 overflow-y-auto pb-6">
+        <div className="px-4 space-y-6 mt-4 pb-4">
+          {!filteredTree.length && (<div className="text-center py-10 text-zinc-400"><p>Nenhum procedimento encontrado.</p></div>)}
+          {filteredTree.map(node => (
+            <div key={node.modulo.id} className="space-y-3">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold uppercase text-sm tracking-wider sticky top-0 z-10 bg-stone-100/90 dark:bg-[#050505]/90 backdrop-blur-xl py-3 -mx-4 px-4 border-b border-neutral-200/50 dark:border-white/5"><Layers size={16} />{node.modulo.nome}</div>
+              {node.categorias.map(catNode => (
+                <div key={catNode.data.id} className="space-y-3">
+                  <h3 className="text-sm font-semibold ml-2 flex items-center gap-2"><List size={14} /> {catNode.data.nome}</h3>
+                  {catNode.procedimentos.map(proc => {
+                    const selected = selectedItemsMap[proc.id];
+                    const unitPrice = selected?.manualPrice ?? (proc[selected?.priceTier || 'preco_avulso'] ?? proc.preco_avulso ?? 0);
+
+                    return (
+                      <GlassCard key={proc.id} className="p-4 shadow-md">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 pr-4">
+                            <h4 className="font-semibold mb-2">{proc.nome}</h4>
+                            <div className="flex items-center gap-2 relative">
+                              <button onClick={() => setOpenPriceMenu(openPriceMenu === proc.id ? null : proc.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                                <Tag size={12} />
+                                <span>{selected?.manualPrice !== undefined ? 'Manual' : priceTiers[selected?.priceTier || 'preco_avulso']}</span>
+                              </button>
+                              <span className="font-mono text-sm text-zinc-700 dark:text-zinc-200 font-bold">{unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                              {openPriceMenu === proc.id && <PriceMenu proc={proc} menu="main" />}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selected ? (
+                              <>
+                                <button onClick={() => handleItemQuantityChange(proc.id, -1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-red-200 dark:hover:bg-red-800 text-red-600"><Minus size={16} /></button>
+                                <span className="w-8 text-center font-bold text-lg">{selected.quantity}</span>
+                                <button onClick={() => handleItemQuantityChange(proc.id, 1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-green-200 dark:hover:bg-green-800 text-green-600"><Plus size={16} /></button>
+                              </>
+                            ) : (
+                              <button onClick={() => handleItemSelect(proc.id)} className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold text-sm">Adicionar</button>
+                            )}
+                          </div>
+                        </div>
+                      </GlassCard>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </main>
+
+      {isCartOpen && <CartSidebar />}
+
+      {isCreatingClient && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
+              <h3 className="font-bold text-zinc-800 dark:text-white">Novo Cliente</h3>
+              <button onClick={() => setIsCreatingClient(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
+                <input
+                  type="text"
+                  value={newClientData.name}
+                  onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  placeholder="Nome do Cliente ou Empresa"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Email</label>
+                <input
+                  type="email"
+                  value={newClientData.email}
+                  onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Telefone</label>
+                <input
+                  type="tel"
+                  value={newClientData.phone}
+                  onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <button
+                onClick={handleCreateClient}
+                disabled={isSavingNewClient || !newClientData.name.trim()}
+                className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                Criar Cliente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
