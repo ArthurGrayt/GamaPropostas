@@ -1,0 +1,493 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { CatalogContext, fetchCatalogData, createProposal } from '../services/mockData';
+import { GlassCard, SearchBar, FilterPill, cn } from './UIComponents';
+import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight } from 'lucide-react';
+import { Modulo, Categoria, Procedimento, Client } from '../types';
+
+interface Props {
+  onBack: () => void;
+  onSuccess: () => void;
+}
+
+type RenderNode = {
+  modulo: Modulo;
+  categorias: { data: Categoria; procedimentos: Procedimento[] }[];
+};
+
+type PriceTierKey = 'preco_avulso' | 'preco_particular' | 'preco_parceiro' | 'preco_clientegama' | 'preco_premium';
+
+const priceTiers: Record<PriceTierKey, string> = {
+    preco_avulso: 'Avulso',
+    preco_particular: 'Particular',
+    preco_parceiro: 'Parceiro',
+    preco_clientegama: 'Cliente Gama',
+    preco_premium: 'Premium',
+};
+
+type SelectedItemState = {
+    quantity: number;
+    priceTier: PriceTierKey;
+    manualPrice?: number;
+};
+
+type SummaryItem = {
+    procedimento: Procedimento;
+    quantity: number;
+    priceTier: PriceTierKey;
+    unitPrice: number;
+    manualPrice?: number;
+};
+
+
+export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogContext>({ modulos: [], categorias: [], procedimentos: [], clientes: [] });
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  
+  const [openPriceMenu, setOpenPriceMenu] = useState<number | null>(null);
+  const priceMenuRef = useRef<HTMLDivElement>(null);
+  const [openSidebarPriceMenu, setOpenSidebarPriceMenu] = useState<number | null>(null);
+  const sidebarPriceMenuRef = useRef<HTMLDivElement>(null);
+  
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedItemsMap, setSelectedItemsMap] = useState<Record<number, SelectedItemState>>({});
+  const [deliveryDates, setDeliveryDates] = useState<Record<number, string>>({});
+  const [globalDeliveryDate, setGlobalDeliveryDate] = useState('');
+  
+  const [editingPrice, setEditingPrice] = useState<{ procId: number; price: string } | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeModuloId, setActiveModuloId] = useState<number | 'ALL'>('ALL');
+  const [activeCategoriaId, setActiveCategoriaId] = useState<number | 'ALL'>('ALL');
+
+  useEffect(() => {
+    const load = async () => {
+      const data = await fetchCatalogData();
+      setCatalog(data);
+      if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  // Close price menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (priceMenuRef.current && !priceMenuRef.current.contains(event.target as Node)) {
+            setOpenPriceMenu(null);
+        }
+        if (sidebarPriceMenuRef.current && !sidebarPriceMenuRef.current.contains(event.target as Node)) {
+            setOpenSidebarPriceMenu(null);
+        }
+    };
+    
+    if (openPriceMenu !== null || openSidebarPriceMenu !== null) {
+        document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openPriceMenu, openSidebarPriceMenu]);
+
+  const filteredTree = useMemo(() => {
+    if (!catalog.modulos.length) return [];
+    return catalog.modulos.reduce<RenderNode[]>((tree, mod) => {
+      if (activeModuloId !== 'ALL' && mod.id !== activeModuloId) return tree;
+      const modNode: RenderNode = { modulo: mod, categorias: [] };
+      catalog.categorias
+        .filter(c => c.idmodulo === mod.id)
+        .forEach(cat => {
+          if (activeCategoriaId !== 'ALL' && cat.id !== activeCategoriaId) return;
+          const procs = catalog.procedimentos.filter(p => {
+            const query = searchQuery.toLowerCase();
+            return p.idcategoria === cat.id && (!query || 
+              p.nome.toLowerCase().includes(query) || 
+              cat.nome.toLowerCase().includes(query) ||
+              mod.nome.toLowerCase().includes(query));
+          });
+          if (procs.length > 0) modNode.categorias.push({ data: cat, procedimentos: procs });
+        });
+      if (modNode.categorias.length > 0) tree.push(modNode);
+      return tree;
+    }, []);
+  }, [catalog, activeModuloId, activeCategoriaId, searchQuery]);
+  
+  const summaryItems = useMemo((): SummaryItem[] => {
+    return Object.keys(selectedItemsMap).map((procIdStr): SummaryItem | null => {
+      const procId = parseInt(procIdStr, 10);
+      const state = selectedItemsMap[procId];
+      const procedimento = catalog.procedimentos.find(p => p.id === procId);
+      if (!procedimento || !state) return null;
+
+      const unitPrice = state.manualPrice ?? (procedimento[state.priceTier] ?? procedimento.preco_avulso ?? 0);
+      
+      return {
+        procedimento,
+        quantity: state.quantity,
+        priceTier: state.priceTier,
+        unitPrice,
+        manualPrice: state.manualPrice,
+      };
+    }).filter((i): i is SummaryItem => i !== null);
+  }, [selectedItemsMap, catalog.procedimentos]);
+  
+  const totalValue = useMemo(() => summaryItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0), [summaryItems]);
+
+  const availableCategorias = useMemo(() => {
+      if (activeModuloId === 'ALL') return [];
+      return catalog.categorias.filter(c => c.idmodulo === activeModuloId);
+  }, [catalog.categorias, activeModuloId]);
+
+  const handleItemSelect = (procId: number) => {
+    setSelectedItemsMap(prev => {
+      const newState = { ...prev };
+      if (newState[procId]) {
+        newState[procId].quantity += 1;
+      } else {
+        newState[procId] = { quantity: 1, priceTier: 'preco_avulso' };
+      }
+      return newState;
+    });
+  };
+
+  const handleItemQuantityChange = (procId: number, change: number) => {
+    setSelectedItemsMap(prev => {
+        const newState = { ...prev };
+        if (newState[procId]) {
+            const newQuantity = newState[procId].quantity + change;
+            if (newQuantity <= 0) {
+                delete newState[procId];
+            } else {
+                newState[procId].quantity = newQuantity;
+            }
+        }
+        return newState;
+    });
+  };
+
+  const handlePriceTierSelect = (procId: number, tier: PriceTierKey, menu: 'main' | 'sidebar') => {
+    const proc = catalog.procedimentos.find(p => p.id === procId);
+    if (!proc) return;
+
+    setSelectedItemsMap(prev => ({
+        ...prev,
+        [procId]: {
+            ...(prev[procId] || { quantity: 1, priceTier: 'preco_avulso' }),
+            priceTier: tier,
+            manualPrice: undefined,
+        }
+    }));
+    if (menu === 'main') setOpenPriceMenu(null);
+    else setOpenSidebarPriceMenu(null);
+  };
+  
+  const handleSaveManualPrice = () => {
+    if (!editingPrice) return;
+    const { procId, price } = editingPrice;
+    const newPrice = price === '' ? undefined : parseFloat(price);
+
+    setSelectedItemsMap(prev => ({
+        ...prev,
+        [procId]: {
+            ...(prev[procId] || { quantity: 1, priceTier: 'preco_avulso' }),
+            manualPrice: newPrice,
+        }
+    }));
+    setEditingPrice(null);
+  };
+  
+  const handleApplyGlobalDate = () => {
+      if (!globalDeliveryDate) return;
+      const newDates: Record<number, string> = {};
+      Object.keys(selectedItemsMap).forEach(procId => {
+          newDates[Number(procId)] = globalDeliveryDate;
+      });
+      setDeliveryDates(newDates);
+  };
+
+  const handleCreateProposal = async () => {
+    if (!selectedClientId) {
+      alert('Por favor, selecione um cliente.');
+      return;
+    }
+    if (summaryItems.length === 0) {
+      alert('Adicione pelo menos um item à proposta.');
+      return;
+    }
+
+    setSubmitting(true);
+    
+    const itemsPayload = summaryItems.map(item => ({
+      procedimentoId: item.procedimento.id,
+      quantidade: item.quantity,
+      preco: item.unitPrice,
+      data_para_entrega: deliveryDates[item.procedimento.id] || globalDeliveryDate || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
+    }));
+
+    const success = await createProposal(selectedClientId, itemsPayload);
+
+    if (success) {
+      onSuccess();
+    } else {
+      alert('Ocorreu um erro ao criar a proposta. Tente novamente.');
+      setSubmitting(false);
+    }
+  };
+
+  const PriceMenu: React.FC<{proc: Procedimento, menu: 'main' | 'sidebar'}> = ({proc, menu}) => {
+      const tiers = (Object.keys(priceTiers) as PriceTierKey[]).filter(key => proc[key] != null);
+      return(
+          <div ref={menu === 'main' ? priceMenuRef : sidebarPriceMenuRef} className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-zinc-800 rounded-lg shadow-2xl border dark:border-white/10 z-50 animate-fade-in p-1">
+              {tiers.map(tier => (
+                  <button key={tier} onClick={() => handlePriceTierSelect(proc.id, tier, menu)} className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white flex items-center justify-between gap-3 text-zinc-700 dark:text-zinc-200">
+                      <span>{priceTiers[tier]}</span>
+                      <span className="font-mono text-xs">{(proc[tier] || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  </button>
+              ))}
+          </div>
+      );
+  }
+
+  if (loading) {
+      return (<div className="flex h-screen items-center justify-center text-zinc-500"><Loader2 className="animate-spin mr-2" /> Carregando catálogo...</div>);
+  }
+
+  const CartSidebar = () => {
+    const [activeTab, setActiveTab] = useState<'itens' | 'prazos'>('itens');
+
+    const TabButton: React.FC<{
+      label: string;
+      icon: React.ElementType;
+      isActive: boolean;
+      onClick: () => void;
+    }> = ({ label, icon: Icon, isActive, onClick }) => (
+      <button
+        onClick={onClick}
+        className={cn(
+          'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors',
+          isActive
+            ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
+            : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+        )}
+      >
+        <Icon size={16} />
+        {label}
+      </button>
+    );
+
+    return (
+      <>
+        <div onClick={() => setIsCartOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-backdrop-fade-in"></div>
+        <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-stone-50 dark:bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-50 flex flex-col animate-cart-slide-in">
+          <div className="p-4 border-b dark:border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg"><ShoppingCart size={20} /></div>
+              <div>
+                <h2 className="font-bold text-lg">Resumo da Proposta</h2>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+              </div>
+            </div>
+            <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><XIcon size={20}/></button>
+          </div>
+          
+          <div className="border-b dark:border-white/10 flex">
+            <TabButton label="Itens" icon={ListTodo} isActive={activeTab === 'itens'} onClick={() => setActiveTab('itens')} />
+            <TabButton label="Prazos" icon={CalendarClock} isActive={activeTab === 'prazos'} onClick={() => setActiveTab('prazos')} />
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {activeTab === 'itens' && (
+              <div className="space-y-3">
+                {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
+                {summaryItems.map(item => (
+                    <div key={item.procedimento.id} className="p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10">
+                        <div className="flex-1">
+                            <p className="font-semibold text-sm">{item.procedimento.nome}</p>
+                            <div className="flex items-center gap-2 mt-1 relative">
+                                <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                                    <Tag size={12} />
+                                    <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
+                                </button>
+                                
+                                {editingPrice?.procId === item.procedimento.id ? (
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={editingPrice.price}
+                                        onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
+                                        onBlur={handleSaveManualPrice}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
+                                        className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400"/></span>
+                                )}
+                                {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
+                            <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
+                            <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                            <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
+                        </div>
+                        <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
+                    </div>
+                ))}
+              </div>
+            )}
+            
+            {activeTab === 'prazos' && (
+              <div className="space-y-4">
+                  <div>
+                      <label className="block text-sm font-semibold mb-2 flex items-center gap-2"><CalendarPlus size={16} /> Data Global</label>
+                      <div className="flex gap-2">
+                          <input type="date" value={globalDeliveryDate} onChange={e => setGlobalDeliveryDate(e.target.value)} className="flex-1 w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none"/>
+                          <button onClick={handleApplyGlobalDate} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold">Aplicar</button>
+                      </div>
+                  </div>
+                  <div className="space-y-2">
+                      <h3 className="font-semibold text-sm flex items-center gap-2"><ListTodo size={16} /> Datas Individuais</h3>
+                      {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Adicione itens para definir prazos.</p>}
+                      {summaryItems.map(item => (
+                          <div key={item.procedimento.id} className="flex items-center justify-between p-2 bg-white dark:bg-zinc-800/50 rounded-lg border dark:border-white/10">
+                              <p className="text-sm flex-1 pr-2 truncate">{item.procedimento.nome}</p>
+                              <input type="date" value={deliveryDates[item.procedimento.id] || ''} onChange={e => setDeliveryDates(prev => ({...prev, [item.procedimento.id]: e.target.value}))} className="bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"/>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 mt-auto border-t border-white/20 dark:border-white/10">
+              <button
+                  onClick={handleCreateProposal}
+                  disabled={submitting || summaryItems.length === 0 || !selectedClientId}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold transition-all duration-200 active:scale-95 shadow-lg bg-blue-600/90 hover:bg-blue-500 text-white shadow-blue-500/30 disabled:bg-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                  {submitting ? (
+                      <>
+                          <Loader2 size={20} className="animate-spin" />
+                          <span>Salvando...</span>
+                      </>
+                  ) : (
+                      <>
+                          <Save size={20} />
+                          <span>Criar Proposta</span>
+                      </>
+                  )}
+              </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="animate-fade-in bg-stone-50 dark:bg-[#050505] h-screen flex flex-col relative overflow-hidden">
+        {/* Header */}
+        <div className="z-20 bg-stone-100/80 dark:bg-[#050505]/80 backdrop-blur-xl border-b border-neutral-200/50 dark:border-white/5 pb-4 px-4 pt-6">
+            <div className="flex items-center justify-between gap-4 mb-4">
+                 <div className="flex items-center gap-4">
+                    <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><ArrowLeft /></button>
+                    <h1 className="text-xl font-bold">Nova Proposta</h1>
+                </div>
+                <button
+                    onClick={() => setIsCartOpen(true)}
+                    className="relative p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                    aria-label="Abrir resumo da proposta"
+                >
+                    <ShoppingCart className="text-zinc-700 dark:text-zinc-300"/>
+                    {summaryItems.length > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold ring-2 ring-stone-100 dark:ring-[#050505]">
+                            {summaryItems.reduce((acc, item) => acc + item.quantity, 0)}
+                        </span>
+                    )}
+                </button>
+            </div>
+            
+            <div className="flex flex-col md:flex-row items-center gap-3 mb-3">
+                <select
+                    value={selectedClientId}
+                    onChange={e => setSelectedClientId(e.target.value)}
+                    className="w-full md:w-2/3 h-12 rounded-2xl bg-white/80 dark:bg-zinc-800/50 backdrop-blur-md border border-neutral-200/50 dark:border-white/5 focus:ring-2 focus:ring-blue-500/50 focus:outline-none text-zinc-800 dark:text-white placeholder-zinc-400 shadow-sm transition-all px-4"
+                >
+                    {catalog.clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+                <SearchBar 
+                    value={searchQuery} 
+                    onChange={setSearchQuery} 
+                    placeholder="Buscar procedimento..." 
+                    className="w-full md:w-1/3"
+                />
+            </div>
+
+            <div className="space-y-2">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+                    <FilterPill label="Todos Módulos" isActive={activeModuloId === 'ALL'} onClick={() => { setActiveModuloId('ALL'); setActiveCategoriaId('ALL'); }} />
+                    {catalog.modulos.map(m => (<FilterPill key={m.id} label={m.nome} isActive={activeModuloId === m.id} onClick={() => { setActiveModuloId(m.id); setActiveCategoriaId('ALL'); }} />))}
+                </div>
+                {activeModuloId !== 'ALL' && availableCategorias.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4 animate-fade-in">
+                        <FilterPill label="Todas Categorias" isActive={activeCategoriaId === 'ALL'} onClick={() => setActiveCategoriaId('ALL')} />
+                        {availableCategorias.map(c => (<FilterPill key={c.id} label={c.nome} isActive={activeCategoriaId === c.id} onClick={() => setActiveCategoriaId(c.id)} />))}
+                    </div>
+                )}
+            </div>
+        </div>
+        
+        <main className="flex-1 overflow-y-auto pb-6">
+            <div className="px-4 space-y-6 mt-4 pb-4">
+                {!filteredTree.length && (<div className="text-center py-10 text-zinc-400"><p>Nenhum procedimento encontrado.</p></div>)}
+                {filteredTree.map(node => (
+                    <div key={node.modulo.id} className="space-y-3">
+                        <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold uppercase text-sm tracking-wider sticky top-0 z-10 bg-stone-100/90 dark:bg-[#050505]/90 backdrop-blur-xl py-3 -mx-4 px-4 border-b border-neutral-200/50 dark:border-white/5"><Layers size={16} />{node.modulo.nome}</div>
+                        {node.categorias.map(catNode => (
+                            <div key={catNode.data.id} className="space-y-3">
+                                <h3 className="text-sm font-semibold ml-2 flex items-center gap-2"><List size={14} /> {catNode.data.nome}</h3>
+                                {catNode.procedimentos.map(proc => {
+                                    const selected = selectedItemsMap[proc.id];
+                                    const unitPrice = selected?.manualPrice ?? (proc[selected?.priceTier || 'preco_avulso'] ?? proc.preco_avulso ?? 0);
+
+                                    return (
+                                    <GlassCard key={proc.id} className="p-4 shadow-md">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1 pr-4">
+                                                <h4 className="font-semibold mb-2">{proc.nome}</h4>
+                                                <div className="flex items-center gap-2 relative">
+                                                    <button onClick={() => setOpenPriceMenu(openPriceMenu === proc.id ? null : proc.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                                                        <Tag size={12} />
+                                                        <span>{selected?.manualPrice !== undefined ? 'Manual' : priceTiers[selected?.priceTier || 'preco_avulso']}</span>
+                                                    </button>
+                                                    <span className="font-mono text-sm text-zinc-700 dark:text-zinc-200 font-bold">{unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                                    {openPriceMenu === proc.id && <PriceMenu proc={proc} menu="main" />}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                            {selected ? (
+                                                <>
+                                                    <button onClick={() => handleItemQuantityChange(proc.id, -1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-red-200 dark:hover:bg-red-800 text-red-600"><Minus size={16} /></button>
+                                                    <span className="w-8 text-center font-bold text-lg">{selected.quantity}</span>
+                                                    <button onClick={() => handleItemQuantityChange(proc.id, 1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-green-200 dark:hover:bg-green-800 text-green-600"><Plus size={16} /></button>
+                                                </>
+                                            ) : (
+                                                <button onClick={() => handleItemSelect(proc.id)} className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold text-sm">Adicionar</button>
+                                            )}
+                                            </div>
+                                        </div>
+                                    </GlassCard>
+                                )})}
+                            </div>
+                        ))}
+                    </div>
+                ))}
+            </div>
+        </main>
+        
+        {isCartOpen && <CartSidebar />}
+
+    </div>
+  );
+};
