@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { ProposalList } from './components/ProposalList';
 import { ProposalDetail } from './components/ProposalDetail';
 import { ProposalCreate } from './components/ProposalCreate';
+import { ClientManagement } from './components/ClientManagement';
 import { PriceEditor } from './components/PriceEditor';
 import { getProposals, getProposalById, updateProposalStatus } from './services/mockData';
 import { EnrichedProposal, ProposalStatus } from './types';
 import { Loader2 } from 'lucide-react';
 
-type ViewState = 'LIST' | 'DETAIL' | 'CREATE' | 'SETTINGS';
+type ViewState = 'LIST' | 'DETAIL' | 'CREATE' | 'SETTINGS' | 'CLIENTS';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LIST');
@@ -95,6 +96,11 @@ const App: React.FC = () => {
     setSelectedId(null);
   };
 
+  const navigateToClients = () => {
+    setView('CLIENTS');
+    setSelectedId(null);
+  };
+
   const handleCreateSuccess = () => {
     navigateToList();
     refreshData();
@@ -145,6 +151,7 @@ const App: React.FC = () => {
             onToggleTheme={toggleTheme}
             onCreate={navigateToCreate}
             onNavigateToSettings={navigateToSettings}
+            onNavigateToClients={navigateToClients}
           />
         ) : view === 'CREATE' ? (
           <ProposalCreate
@@ -153,6 +160,10 @@ const App: React.FC = () => {
           />
         ) : view === 'SETTINGS' ? (
           <PriceEditor
+            onBack={navigateToList}
+          />
+        ) : view === 'CLIENTS' ? (
+          <ClientManagement
             onBack={navigateToList}
           />
         ) : (

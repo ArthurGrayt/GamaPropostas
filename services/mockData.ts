@@ -63,7 +63,9 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
         nome: displayName,
         nome_fantasia: rawClient.nome_fantasia,
         razao_social: rawClient.razao_social,
-        avatar: rawClient.avatar
+        avatar: rawClient.avatar,
+        cliente_propostas: rawClient.cliente_propostas || [],
+        clientefrequente: rawClient.clientefrequente
       };
     });
 

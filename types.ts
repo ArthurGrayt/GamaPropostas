@@ -9,6 +9,8 @@ export interface Client {
   nome_fantasia?: string;
   razao_social?: string;
   avatar?: string; // Optional, might not exist in DB
+  cliente_propostas?: number[]; // Array of proposal IDs
+  clientefrequente?: boolean;
 }
 
 export interface Modulo {
