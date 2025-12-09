@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { EnrichedProposal, EnrichedItem } from '../types';
 
 // --- Constants ---
@@ -201,24 +201,44 @@ export const generateProposalPdf = async (proposal: EnrichedProposal): Promise<v
     // 4. Create Final PDF
     const finalDoc = await PDFDocument.create();
 
-    // 5. Copy Pages
-    // Copy Page 1 (Cover) and Page 2 (Intro) from Model
-    // Indices are 0-based: 0=Page1, 1=Page2
-    const [coverPage, introPage] = await finalDoc.copyPages(modelDoc, [0, 1]);
-    finalDoc.addPage(coverPage);
+    // 5. Assemble Pages
+
+    // A. Front Cover (Image)
+    const coverBytes = await fetch('/cover_page.png').then(res => {
+      if (!res.ok) throw new Error('Failed to load cover_page.png');
+      return res.arrayBuffer();
+    });
+    const coverImage = await finalDoc.embedPng(coverBytes);
+    const coverPage = finalDoc.addPage();
+    const { width: cpWidth, height: cpHeight } = coverPage.getSize();
+    coverPage.drawImage(coverImage, { x: 0, y: 0, width: cpWidth, height: cpHeight });
+
+    // B. Intro Page (From Model - Page 2, Index 1)
+    const [introPage] = await finalDoc.copyPages(modelDoc, [1]);
     finalDoc.addPage(introPage);
 
-    // Copy All Pages from Dynamic Doc (Modules)
-    // Only if there are dynamic pages (which there should be)
+    // C. Dynamic Modules
     if (dynamicDoc.getPageCount() > 0) {
       const dynamicPages = await finalDoc.copyPages(dynamicDoc, dynamicDoc.getPageIndices());
       dynamicPages.forEach(page => finalDoc.addPage(page));
     }
 
-    // Copy Back Cover (Last Page of Model)
-    const lastPageIndex = modelDoc.getPageCount() - 1;
-    const [backCoverPage] = await finalDoc.copyPages(modelDoc, [lastPageIndex]);
-    finalDoc.addPage(backCoverPage);
+    // D. Back Cover (Image)
+    const backCoverBytes = await fetch('/back_cover.png').then(res => {
+      if (!res.ok) throw new Error('Failed to load back_cover.png');
+      return res.arrayBuffer();
+    });
+
+    const backCoverImage = await finalDoc.embedPng(backCoverBytes);
+    const backCoverPage = finalDoc.addPage();
+    const { width: pgWidth, height: pgHeight } = backCoverPage.getSize();
+
+    backCoverPage.drawImage(backCoverImage, {
+      x: 0,
+      y: 0,
+      width: pgWidth,
+      height: pgHeight,
+    });
 
     // 6. Save
     const pdfBytes = await finalDoc.save();

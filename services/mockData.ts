@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { 
-  Proposta, ItemProposta, Procedimento, Categoria, Modulo, Client, 
+import {
+  Proposta, ItemProposta, Procedimento, Categoria, Modulo, Client,
   EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus
 } from '../types';
 
@@ -21,28 +21,28 @@ export interface CatalogContext {
 type PriceTierKey = 'preco_avulso' | 'preco_particular' | 'preco_parceiro' | 'preco_clientegama' | 'preco_premium';
 
 const priceTiers: Record<PriceTierKey, string> = {
-    preco_avulso: 'Avulso',
-    preco_particular: 'Particular',
-    preco_parceiro: 'Parceiro',
-    preco_clientegama: 'Cliente Gama',
-    preco_premium: 'Premium',
+  preco_avulso: 'Avulso',
+  preco_particular: 'Particular',
+  preco_parceiro: 'Parceiro',
+  preco_clientegama: 'Cliente Gama',
+  preco_premium: 'Premium',
 };
 
 // --- Service Methods ---
 
 // Helper to handle table name variations (singular vs plural, etc.)
 const safeFetch = async <T>(primaryTable: string, fallbackTable?: string) => {
-    let { data, error } = await supabase.from(primaryTable).select('*');
-    
-    if (error && fallbackTable) {
-        console.warn(`Failed to fetch from '${primaryTable}', trying '${fallbackTable}'...`);
-        const fallback = await supabase.from(fallbackTable).select('*');
-        data = fallback.data;
-        error = fallback.error;
-    }
-    
-    // Ensure we always return an array, never null
-    return { data: (data || []) as T[], error };
+  let { data, error } = await supabase.from(primaryTable).select('*');
+
+  if (error && fallbackTable) {
+    console.warn(`Failed to fetch from '${primaryTable}', trying '${fallbackTable}'...`);
+    const fallback = await supabase.from(fallbackTable).select('*');
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  // Ensure we always return an array, never null
+  return { data: (data || []) as T[], error };
 };
 
 export const fetchCatalogData = async (): Promise<CatalogContext> => {
@@ -57,14 +57,14 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
 
     // Map raw client data to Client interface with proper 'nome'
     const mappedClients: Client[] = (cliRes.data || []).map((rawClient: any) => {
-        const displayName = rawClient.nome_fantasia || rawClient.razao_social || rawClient.nome || `ID: ${String(rawClient.id).substring(0, 8)}`;
-        return {
-            id: rawClient.id,
-            nome: displayName,
-            nome_fantasia: rawClient.nome_fantasia,
-            razao_social: rawClient.razao_social,
-            avatar: rawClient.avatar
-        };
+      const displayName = rawClient.nome_fantasia || rawClient.razao_social || rawClient.nome || `ID: ${String(rawClient.id).substring(0, 8)}`;
+      return {
+        id: rawClient.id,
+        nome: displayName,
+        nome_fantasia: rawClient.nome_fantasia,
+        razao_social: rawClient.razao_social,
+        avatar: rawClient.avatar
+      };
     });
 
     return {
@@ -87,7 +87,7 @@ export const getProposals = async (): Promise<EnrichedProposal[]> => {
       .order('created_at', { ascending: false });
 
     if (propError) throw propError;
-    
+
     const proposals = (proposalsData || []).map((p: any) => ({
       ...p,
       status: p.status || 'PENDING',
@@ -109,13 +109,13 @@ export const getProposals = async (): Promise<EnrichedProposal[]> => {
     let items: ItemProposta[] = [];
     if (allItemIds.length > 0) {
       const { data, error } = await supabase.from('itensproposta').select('*').in('id', allItemIds);
-        
+
       if (error) console.error("Error fetching items:", error);
       items = (data || []) as ItemProposta[];
     } else {
-       // Only fetch all if we really have no clues, but be safe
-       const { data } = await safeFetch<ItemProposta>('itensproposta');
-       items = data;
+      // Only fetch all if we really have no clues, but be safe
+      const { data } = await safeFetch<ItemProposta>('itensproposta');
+      items = data;
     }
 
     const context = await fetchCatalogData();
@@ -142,24 +142,24 @@ export const getProposalById = async (id: number): Promise<EnrichedProposal | un
       ...proposalData,
       status: proposalData.status || 'PENDING'
     } as Proposta;
-    
+
     // Handle aliases and ensure array
     const rawItems = p.itensproposta || (p as any).itens_proposta;
-    const itemIds = Array.isArray(rawItems) ? rawItems.filter((x:any) => x != null) : [];
-    
+    const itemIds = Array.isArray(rawItems) ? rawItems.filter((x: any) => x != null) : [];
+
     let relatedItems: ItemProposta[] = [];
-    
+
     if (itemIds.length > 0) {
-       const { data, error: itemsError } = await supabase.from('itensproposta').select('*').in('id', itemIds);
-       if (itemsError) console.error(`Error fetching items for proposal ${id}:`, itemsError);
-       relatedItems = (data || []) as ItemProposta[];
+      const { data, error: itemsError } = await supabase.from('itensproposta').select('*').in('id', itemIds);
+      if (itemsError) console.error(`Error fetching items for proposal ${id}:`, itemsError);
+      relatedItems = (data || []) as ItemProposta[];
     } else {
-        console.warn(`Proposal ${id} has empty items array. Trying FK lookup.`);
-        // Fallback for older data structures where items might be linked via a (now-removed) foreign key.
-        const { data } = await supabase.from('itensproposta').select('*').eq('proposta_id', id);
-        if (data && data.length > 0) {
-            relatedItems = data as unknown as ItemProposta[];
-        }
+      console.warn(`Proposal ${id} has empty items array. Trying FK lookup.`);
+      // Fallback for older data structures where items might be linked via a (now-removed) foreign key.
+      const { data } = await supabase.from('itensproposta').select('*').eq('proposta_id', id);
+      if (data && data.length > 0) {
+        relatedItems = data as unknown as ItemProposta[];
+      }
     }
 
     const context = await fetchCatalogData();
@@ -176,23 +176,27 @@ export const updateProposalStatus = async (id: number, status: ProposalStatus): 
     .from('proposta')
     .update({ status })
     .eq('id', id);
-  
+
   if (error) console.error("Error updating status:", error);
 };
 
-export const deleteProposal = async (proposalId: number): Promise<boolean> => {
+export const deleteProposal = async (proposalId: number): Promise<{ success: boolean; error?: string }> => {
   try {
     // Step 1: Get all possible item IDs related to this proposal.
     // Method A: From the array field in the proposal table.
     const { data: proposalData, error: fetchError } = await supabase
       .from('proposta')
-      .select('itensproposta, itens_proposta') // Check both possible field names
+      .select('itensproposta')
       .eq('id', proposalId)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means not found, which is ok
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        // Proposal not found, consider it already deleted.
+        return { success: true };
+      }
       console.error(`Error fetching proposal ${proposalId} for deletion:`, fetchError.message);
-      return false;
+      return { success: false, error: `Erro ao buscar proposta: ${fetchError.message}` };
     }
 
     const itemIdsFromField = proposalData?.itensproposta || (proposalData as any)?.itens_proposta || [];
@@ -205,7 +209,6 @@ export const deleteProposal = async (proposalId: number): Promise<boolean> => {
       .eq('proposta_id', proposalId);
 
     if (fkError) {
-      // This might not be a fatal error if the column doesn't exist, so we warn instead of failing.
       console.warn(`Could not query items by 'proposta_id' for proposal ${proposalId}: ${fkError.message}. This may be expected.`);
     }
     const itemIdsFromFk = itemsFromFk ? itemsFromFk.map(item => item.id) : [];
@@ -223,12 +226,14 @@ export const deleteProposal = async (proposalId: number): Promise<boolean> => {
 
       if (deleteItemsError) {
         console.error(`CRITICAL: Failed to delete items for proposal ${proposalId}. Aborting. Error:`, deleteItemsError.message);
-        return false;
+        if (deleteItemsError.code === '23503') {
+          return { success: false, error: 'Não é possível apagar os itens desta proposta pois eles estão vinculados a outros registros (ex: Financeiro).' };
+        }
+        return { success: false, error: `Erro ao apagar itens: ${deleteItemsError.message}` };
       }
     }
 
     // Step 3: Delete the proposal itself.
-    // We only try to delete if it was found in the first place.
     if (proposalData) {
       const { error: deleteProposalError } = await supabase
         .from('proposta')
@@ -237,17 +242,20 @@ export const deleteProposal = async (proposalId: number): Promise<boolean> => {
 
       if (deleteProposalError) {
         console.error(`CRITICAL: Failed to delete proposal ${proposalId} itself. Error:`, deleteProposalError.message);
-        return false;
+        if (deleteProposalError.code === '23503') {
+          return { success: false, error: 'Não é possível apagar esta proposta pois ela está vinculada a outros registros (ex: Financeiro).' };
+        }
+        return { success: false, error: `Erro ao apagar proposta: ${deleteProposalError.message}` };
       }
     } else {
       console.log(`Proposal ${proposalId} was not found, assuming already deleted. Cleanup complete.`);
     }
 
-    return true; // Success
+    return { success: true };
 
   } catch (e: any) {
     console.error(`Exception while deleting proposal ${proposalId}:`, e.message);
-    return false;
+    return { success: false, error: `Erro interno: ${e.message}` };
   }
 };
 
@@ -279,8 +287,8 @@ export const updateItemStatus = async (itemId: number, status: ItemStatus): Prom
 
 export const updateItemDetails = async (
   itemId: number,
-  details: { 
-    preco?: number; 
+  details: {
+    preco?: number;
     data_para_entrega?: string;
   }
 ): Promise<void> => {
@@ -303,16 +311,16 @@ export const updateProcedurePrice = async (
     .from('procedimento')
     .update(pricesToUpdate)
     .eq('id', procedureId);
-  
+
   if (error) {
     console.error(`Error updating prices for procedure ${procedureId} on 'procedimento':`, error);
     const { error: fallbackError } = await supabase
-        .from('procedimentos')
-        .update(pricesToUpdate)
-        .eq('id', procedureId);
+      .from('procedimentos')
+      .update(pricesToUpdate)
+      .eq('id', procedureId);
     if (fallbackError) {
-        console.error(`Fallback error updating prices for procedure ${procedureId} on 'procedimentos':`, fallbackError);
-        return false;
+      console.error(`Fallback error updating prices for procedure ${procedureId} on 'procedimentos':`, fallbackError);
+      return false;
     }
   }
 
@@ -406,97 +414,97 @@ const unrollEnrichedItems = (items: EnrichedItem[]): EnrichedItem[] => {
 
 
 const enrichProposal = (
-  proposal: Proposta, 
-  allItems: ItemProposta[], 
+  proposal: Proposta,
+  allItems: ItemProposta[],
   context: CatalogContext
 ): EnrichedProposal => {
-  
+
   // 1. Resolve Client
   const dbClient = context.clientes.find(c => String(c.id) === String(proposal.idcliente));
   const rawClient = dbClient as any;
   const nameFromDB = rawClient?.nome_fantasia || rawClient?.razao_social || rawClient?.nome;
-  const displayName = nameFromDB || `Cliente Desconhecido (ID: ${String(proposal.idcliente)?.substring(0,8)}...)`;
-  
+  const displayName = nameFromDB || `Cliente Desconhecido (ID: ${String(proposal.idcliente)?.substring(0, 8)}...)`;
+
   const client: Client = dbClient ? {
-      id: rawClient.id,
-      nome: displayName,
-      nome_fantasia: rawClient.nome_fantasia,
-      razao_social: rawClient.razao_social,
-      avatar: rawClient.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`
-  } : { 
-      id: proposal.idcliente || 'unknown', 
-      nome: displayName, 
-      avatar: 'https://ui-avatars.com/api/?name=Unknown' 
+    id: rawClient.id,
+    nome: displayName,
+    nome_fantasia: rawClient.nome_fantasia,
+    razao_social: rawClient.razao_social,
+    avatar: rawClient.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`
+  } : {
+    id: proposal.idcliente || 'unknown',
+    nome: displayName,
+    avatar: 'https://ui-avatars.com/api/?name=Unknown'
   };
-  
+
   // 2. Resolve Items
   const rawItemIds = proposal.itensproposta || (proposal as any).itens_proposta;
-  const itemIdsArray = Array.isArray(rawItemIds) ? rawItemIds.filter((x:any) => x != null) : [];
-  
+  const itemIdsArray = Array.isArray(rawItemIds) ? rawItemIds.filter((x: any) => x != null) : [];
+
   let enrichedItems: EnrichedItem[] = [];
 
   const enrichItem = (itemDef: ItemProposta, index: number): EnrichedItem | null => {
-      if (!itemDef) return null;
+    if (!itemDef) return null;
 
-      const procedimento = context.procedimentos.find(p => p.id === itemDef.idprocedimento);
-      if (!procedimento) return null;
+    const procedimento = context.procedimentos.find(p => p.id === itemDef.idprocedimento);
+    if (!procedimento) return null;
 
-      const categoria = context.categorias.find(c => c.id === procedimento.idcategoria);
-      if (!categoria) return null;
+    const categoria = context.categorias.find(c => c.id === procedimento.idcategoria);
+    if (!categoria) return null;
 
-      const modulo = context.modulos.find(m => m.id === categoria.idmodulo);
-      if (!modulo) return null;
+    const modulo = context.modulos.find(m => m.id === categoria.idmodulo);
+    if (!modulo) return null;
 
-      // Infer status from 'data_entregue' as 'status' column doesn't exist
-      const status: ItemStatus = itemDef.data_entregue ? 'PRONTO PARA COBRANÇA' : 'NÃO INICIADO';
+    // Infer status from 'data_entregue' as 'status' column doesn't exist
+    const status: ItemStatus = itemDef.data_entregue ? 'PRONTO PARA COBRANÇA' : 'NÃO INICIADO';
 
-      const unitPrice = itemDef.preco;
-      let inferredModalidade = 'Manual';
+    const unitPrice = itemDef.preco;
+    let inferredModalidade = 'Manual';
 
-      const priceTierMatch = (Object.keys(priceTiers) as PriceTierKey[]).find(tier => procedimento[tier] === unitPrice);
-      if (priceTierMatch) {
-          inferredModalidade = priceTiers[priceTierMatch];
-      } else if (unitPrice === undefined || unitPrice === null) {
-          inferredModalidade = 'Avulso';
-      }
+    const priceTierMatch = (Object.keys(priceTiers) as PriceTierKey[]).find(tier => procedimento[tier] === unitPrice);
+    if (priceTierMatch) {
+      inferredModalidade = priceTiers[priceTierMatch];
+    } else if (unitPrice === undefined || unitPrice === null) {
+      inferredModalidade = 'Avulso';
+    }
 
-      const total = (unitPrice != null)
-        ? unitPrice * itemDef.quantidade
-        : (procedimento.preco_avulso ?? procedimento.preco ?? 0) * itemDef.quantidade;
+    const total = (unitPrice != null)
+      ? unitPrice * itemDef.quantidade
+      : (procedimento.preco_avulso ?? procedimento.preco ?? 0) * itemDef.quantidade;
 
-      const finalItem: EnrichedItem = {
-          ...itemDef,
-          uiKey: `${itemDef.id}-${index}`, 
-          procedimento,
-          categoria,
-          modulo,
-          total,
-          modalidade: inferredModalidade,
-          status, // Overwrite with inferred status
-      };
-      
-      if (!finalItem.data_para_entrega) {
-          const proposalCreationDate = new Date(proposal.created_at);
-          proposalCreationDate.setDate(proposalCreationDate.getDate() + 7);
-          finalItem.data_para_entrega = proposalCreationDate.toISOString();
-      }
+    const finalItem: EnrichedItem = {
+      ...itemDef,
+      uiKey: `${itemDef.id}-${index}`,
+      procedimento,
+      categoria,
+      modulo,
+      total,
+      modalidade: inferredModalidade,
+      status, // Overwrite with inferred status
+    };
 
-      return finalItem;
+    if (!finalItem.data_para_entrega) {
+      const proposalCreationDate = new Date(proposal.created_at);
+      proposalCreationDate.setDate(proposalCreationDate.getDate() + 7);
+      finalItem.data_para_entrega = proposalCreationDate.toISOString();
+    }
+
+    return finalItem;
   };
 
   if (itemIdsArray.length > 0) {
-      enrichedItems = itemIdsArray
-        .map((id, index) => {
-            const itemDef = allItems.find(i => String(i.id) === String(id));
-            return enrichItem(itemDef!, index);
-        })
-        .filter((i): i is EnrichedItem => i !== null);
+    enrichedItems = itemIdsArray
+      .map((id, index) => {
+        const itemDef = allItems.find(i => String(i.id) === String(id));
+        return enrichItem(itemDef!, index);
+      })
+      .filter((i): i is EnrichedItem => i !== null);
   } else {
-     // Fallback for proposals that might not have the item ID array populated
-     enrichedItems = allItems
-       .filter(item => (item as any).proposta_id === proposal.id)
-       .map(enrichItem)
-       .filter((i): i is EnrichedItem => i !== null);
+    // Fallback for proposals that might not have the item ID array populated
+    enrichedItems = allItems
+      .filter(item => (item as any).proposta_id === proposal.id)
+      .map(enrichItem)
+      .filter((i): i is EnrichedItem => i !== null);
   }
 
   const totalValue = enrichedItems.reduce((acc, curr) => acc + (curr.total || 0), 0);
