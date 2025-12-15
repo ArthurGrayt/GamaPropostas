@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFName, PDFString } from 'pdf-lib';
 import { EnrichedProposal, EnrichedItem } from '../types';
 
 // --- Constants ---
@@ -204,14 +204,55 @@ export const generateProposalPdf = async (proposal: EnrichedProposal): Promise<v
     // 5. Assemble Pages
 
     // A. Front Cover (Image)
-    const coverBytes = await fetch('/cover_page.png').then(res => {
-      if (!res.ok) throw new Error('Failed to load cover_page.png');
+    // A. Front Cover (Image)
+    const coverBytes = await fetch('/cover_page.jpg').then(res => {
+      if (!res.ok) throw new Error('Failed to load cover_page.jpg');
       return res.arrayBuffer();
     });
-    const coverImage = await finalDoc.embedPng(coverBytes);
+    const coverImage = await finalDoc.embedJpg(coverBytes);
     const coverPage = finalDoc.addPage();
     const { width: cpWidth, height: cpHeight } = coverPage.getSize();
     coverPage.drawImage(coverImage, { x: 0, y: 0, width: cpWidth, height: cpHeight });
+
+    // --- ADD CLICKABLE LINKS ---
+    // Coordinates (Bottom-Left logic): [xMin, yMin, xMax, yMax]
+    // A4 width: ~595, height: ~842. Bottom-left is (0,0).
+
+    // 1. WhatsApp Link (Higher up in the footer)
+    // Target: https://api.whatsapp.com/send?phone=5531971920766
+    const waLink = finalDoc.context.register(
+      finalDoc.context.obj({
+        Type: 'Annot',
+        Subtype: 'Link',
+        Rect: [50, 115, 180, 145], // Reduced width to avoid overlapping the landline number
+        Border: [0, 0, 0],
+        A: {
+          Type: 'Action',
+          S: 'URI',
+          URI: PDFString.of('https://api.whatsapp.com/send?phone=5531971920766'),
+        },
+      })
+    );
+
+    // 2. Instagram Link (Below the phone)
+    // Target: https://www.instagram.com/gamacentersst/
+    const igLink = finalDoc.context.register(
+      finalDoc.context.obj({
+        Type: 'Annot',
+        Subtype: 'Link',
+        Rect: [50, 80, 300, 110], // Generous hit box
+        Border: [0, 0, 0],
+        A: {
+          Type: 'Action',
+          S: 'URI',
+          URI: PDFString.of('https://www.instagram.com/gamacentersst/'),
+        },
+      })
+    );
+
+    // Attach annotations to the page
+    coverPage.node.set(PDFName.of('Annots'), finalDoc.context.obj([waLink, igLink]));
+    // ---------------------------
 
     // B. Intro Page (From Model - Page 2, Index 1)
     const [introPage] = await finalDoc.copyPages(modelDoc, [1]);

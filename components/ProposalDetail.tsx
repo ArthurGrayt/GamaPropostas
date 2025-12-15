@@ -151,6 +151,10 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
     const handleSaveDateChange = async () => {
         if (!editingDate) return;
+        if (!editingDate.date) {
+            alert("Por favor, selecione uma data válida.");
+            return;
+        }
 
         const itemToUpdate = items.find(i => i.uiKey === editingDate.uiKey);
         if (!itemToUpdate) return;
@@ -246,7 +250,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                 procedimentoId: selectedProcedure.id,
                 quantidade: newItemDetails.quantity,
                 preco: newItemDetails.price,
-                data_para_entrega: newItemDetails.date
+                data_para_entrega: newItemDetails.date || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0]
             }
         );
         setIsSavingNewItem(false);
@@ -485,7 +489,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                             setNewItemDetails({
                                                                 quantity: 1,
                                                                 price: proc.preco_avulso || proc.preco || 0,
-                                                                date: '',
+                                                                date: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
                                                                 isManualPrice: false
                                                             });
                                                         }}

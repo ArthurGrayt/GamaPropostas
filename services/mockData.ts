@@ -55,6 +55,37 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
     if (cliRes.error) console.error("Erro ao buscar clientes:", cliRes.error.message);
     if (modRes.error) console.error("Erro ao buscar módulos:", modRes.error.message);
 
+    // --- FILTERING LOGIC START ---
+    let finalModulos = modRes.data || [];
+    let finalCategorias = catRes.data || [];
+    let finalProcedimentos = procRes.data || [];
+
+    // Identify modules to hide (Módulo 14 and Contas)
+    const modulesToHide = finalModulos.filter(m =>
+      m.nome && (
+        m.nome.includes('Módulo 14') ||
+        m.nome.includes('Modulo 14') ||
+        m.nome.includes('Contas')
+      )
+    );
+    const hiddenModuleIds = modulesToHide.map(m => m.id);
+
+    // Apply cascading filter
+    if (hiddenModuleIds.length > 0) {
+      console.log(`Filtering out ${hiddenModuleIds.length} modules (Módulo 14)`);
+
+      finalModulos = finalModulos.filter(m => !hiddenModuleIds.includes(m.id));
+
+      const hiddenCategoryIds = finalCategorias
+        .filter(c => hiddenModuleIds.includes(c.idmodulo))
+        .map(c => c.id);
+
+      finalCategorias = finalCategorias.filter(c => !hiddenModuleIds.includes(c.idmodulo));
+
+      finalProcedimentos = finalProcedimentos.filter(p => !hiddenCategoryIds.includes(p.idcategoria));
+    }
+    // --- FILTERING LOGIC END ---
+
     // Map raw client data to Client interface with proper 'nome'
     const mappedClients: Client[] = (cliRes.data || []).map((rawClient: any) => {
       const displayName = rawClient.nome_fantasia || rawClient.razao_social || rawClient.nome || `ID: ${String(rawClient.id).substring(0, 8)}`;
@@ -70,9 +101,9 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
     });
 
     return {
-      modulos: modRes.data || [],
-      categorias: catRes.data || [],
-      procedimentos: procRes.data || [],
+      modulos: finalModulos,
+      categorias: finalCategorias,
+      procedimentos: finalProcedimentos,
       clientes: mappedClients,
     };
   } catch (e) {
