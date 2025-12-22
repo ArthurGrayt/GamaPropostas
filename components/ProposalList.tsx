@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { EnrichedProposal, ProposalStatus } from '../types';
 import { GlassCard, Avatar, SearchBar, FilterPill } from './UIComponents';
-import { ChevronRight, Calendar, DollarSign, CheckCircle, XCircle, Clock, Moon, Sun, Archive, Plus, SlidersHorizontal, FileText, Loader2, User } from 'lucide-react';
+import { ChevronRight, Calendar, DollarSign, CheckCircle, XCircle, Clock, Moon, Sun, Archive, Plus, SlidersHorizontal, FileText, Loader2, User, ListTodo } from 'lucide-react';
 import { generateProposalPdf } from '../services/pdfGenerator';
 import { getProposalById } from '../services/mockData';
 
@@ -25,6 +25,35 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<number | null>(null);
+
+    // Persistence State
+    const [savedProposal, setSavedProposal] = useState<{ clientName: string } | null>(null);
+
+    useEffect(() => {
+        const checkSaved = () => {
+            const saved = localStorage.getItem('SECUREFLOW_CART_STATE');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (Object.keys(parsed.selectedItemsMap || {}).length > 0) {
+                        setSavedProposal({ clientName: parsed.clientName || 'Rascunho' });
+                    } else {
+                        setSavedProposal(null);
+                    }
+                } catch {
+                    setSavedProposal(null);
+                }
+            } else {
+                setSavedProposal(null);
+            }
+        };
+
+        checkSaved();
+
+        // Listen for storage events (optional, but good if creating proposal in another tab)
+        window.addEventListener('storage', checkSaved);
+        return () => window.removeEventListener('storage', checkSaved);
+    }, []);
 
     const { activeProposals, archivedProposals } = useMemo(() => {
         const active = proposals.filter(p => p.status !== 'ARCHIVED');
@@ -149,6 +178,30 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
 
             {/* Barra de Busca e Filtros */}
             <section className="space-y-4">
+                {savedProposal && (
+                    <div className="animate-fade-in mb-4">
+                        <button
+                            onClick={onCreate}
+                            className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl flex items-center justify-between group hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-blue-600 text-white rounded-lg shadow-lg shadow-blue-600/20">
+                                    <ListTodo size={20} />
+                                </div>
+                                <div className="text-left">
+                                    <h3 className="font-bold text-blue-700 dark:text-blue-300">Continuar Proposta</h3>
+                                    <p className="text-sm text-blue-600/80 dark:text-blue-400/80">
+                                        Retomar rascunho de <span className="font-semibold">{savedProposal.clientName}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="bg-white dark:bg-blue-950 p-2 rounded-full text-blue-600 dark:text-blue-400 shadow-sm group-hover:scale-110 transition-transform">
+                                <ChevronRight size={20} />
+                            </div>
+                        </button>
+                    </div>
+                )}
+
                 <SearchBar
                     value={searchQuery}
                     onChange={setSearchQuery}

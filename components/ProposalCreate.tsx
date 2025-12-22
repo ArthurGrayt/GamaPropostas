@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { CatalogContext, fetchCatalogData, createProposal, createNewClient } from '../services/mockData';
+import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
-import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash } from 'lucide-react';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
 
 interface Props {
@@ -49,6 +49,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const priceMenuRef = useRef<HTMLDivElement>(null);
   const [openSidebarPriceMenu, setOpenSidebarPriceMenu] = useState<number | null>(null);
   const sidebarPriceMenuRef = useRef<HTMLDivElement>(null);
+  const [openGlobalPriceMenu, setOpenGlobalPriceMenu] = useState(false);
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedItemsMap, setSelectedItemsMap] = useState<Record<number, SelectedItemState>>({});
@@ -61,20 +62,78 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [activeModuloId, setActiveModuloId] = useState<number | 'ALL'>('ALL');
   const [activeCategoriaId, setActiveCategoriaId] = useState<number | 'ALL'>('ALL');
 
-  // New Client State
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
   const [isSavingNewClient, setIsSavingNewClient] = useState(false);
+
+  // New Procedure State
+  const [isCreatingProcedure, setIsCreatingProcedure] = useState(false);
+  const [newProcedureData, setNewProcedureData] = useState({ name: '', categoryId: 0, moduleId: 0 });
+  const [isSavingNewProcedure, setIsSavingNewProcedure] = useState(false);
+
+  const [cartActiveTab, setCartActiveTab] = useState<'itens' | 'prazos'>('itens');
 
   useEffect(() => {
     const load = async () => {
       const data = await fetchCatalogData();
       setCatalog(data);
-      if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+
+      // Load persisted state if exists
+      const savedState = localStorage.getItem('SECUREFLOW_CART_STATE');
+      if (savedState) {
+        try {
+          const parsed = JSON.parse(savedState);
+          // Only restore if we have items
+          if (Object.keys(parsed.selectedItemsMap || {}).length > 0) {
+            setSelectedItemsMap(parsed.selectedItemsMap);
+            if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
+            if (parsed.deliveryDates) setDeliveryDates(parsed.deliveryDates);
+            if (parsed.globalDeliveryDate) setGlobalDeliveryDate(parsed.globalDeliveryDate);
+
+            // We don't set 'loading' to false here, we wait for catalog
+          } else {
+            // If no items, fallback to default behavior (select first client)
+            if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+          }
+        } catch (e) {
+          console.error("Failed to parse saved cart state", e);
+          if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+        }
+      } else {
+        if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+      }
+
       setLoading(false);
     };
     load();
   }, []);
+
+  // Persistence Effect
+  useEffect(() => {
+    if (!loading) {
+      const stateToSave = {
+        selectedItemsMap,
+        selectedClientId,
+        deliveryDates,
+        globalDeliveryDate,
+        // We can also save clientName for the dashboard to verify
+        clientName: catalog.clientes.find(c => String(c.id) === selectedClientId)?.nome || ''
+      };
+      localStorage.setItem('SECUREFLOW_CART_STATE', JSON.stringify(stateToSave));
+    }
+  }, [selectedItemsMap, selectedClientId, deliveryDates, globalDeliveryDate, loading, catalog.clientes]);
+
+  const handleClearCart = () => {
+    if (window.confirm("Tem certeza que deseja limpar o carrinho?")) {
+      setSelectedItemsMap({});
+      setDeliveryDates({});
+      setGlobalDeliveryDate('');
+      localStorage.removeItem('SECUREFLOW_CART_STATE');
+
+      // Optionally reset client
+      if (catalog.clientes.length > 0) setSelectedClientId(String(catalog.clientes[0].id));
+    }
+  };
 
   // Close price menu on outside click
   useEffect(() => {
@@ -148,7 +207,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     setSelectedItemsMap(prev => {
       const newState = { ...prev };
       if (newState[procId]) {
-        newState[procId].quantity += 1;
+        newState[procId] = { ...newState[procId], quantity: newState[procId].quantity + 1 };
       } else {
         newState[procId] = { quantity: 1, priceTier: 'preco_avulso' };
       }
@@ -164,7 +223,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         if (newQuantity <= 0) {
           delete newState[procId];
         } else {
-          newState[procId].quantity = newQuantity;
+          newState[procId] = { ...newState[procId], quantity: newQuantity };
         }
       }
       return newState;
@@ -185,6 +244,22 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     }));
     if (menu === 'main') setOpenPriceMenu(null);
     else setOpenSidebarPriceMenu(null);
+  };
+
+  const handleApplyModeToAll = (tier: PriceTierKey) => {
+    setSelectedItemsMap(prev => {
+      const newState: Record<number, SelectedItemState> = {};
+      Object.keys(prev).forEach(key => {
+        const procId = Number(key);
+        newState[procId] = {
+          ...prev[procId],
+          priceTier: tier,
+          manualPrice: undefined
+        };
+      });
+      return newState;
+    });
+    setOpenGlobalPriceMenu(false);
   };
 
   const handleSaveManualPrice = () => {
@@ -233,6 +308,8 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     const success = await createProposal(selectedClientId, itemsPayload);
 
     if (success) {
+      // Clear persistence on success
+      localStorage.removeItem('SECUREFLOW_CART_STATE');
       onSuccess();
     } else {
       alert('Ocorreu um erro ao criar a proposta. Tente novamente.');
@@ -271,6 +348,33 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     } else {
       alert('Erro ao criar cliente: ' + result.error);
     }
+
+  };
+
+  const handleCreateProcedure = async () => {
+    if (!newProcedureData.name.trim()) {
+      alert('O nome do procedimento é obrigatório.');
+      return;
+    }
+    if (!newProcedureData.categoryId) {
+      alert('Selecione uma categoria.');
+      return;
+    }
+
+    setIsSavingNewProcedure(true);
+    const result = await createProcedure(newProcedureData.name, newProcedureData.categoryId);
+    setIsSavingNewProcedure(false);
+
+    if (result.success && result.data) {
+      // Refresh catalog to include new procedure
+      const data = await fetchCatalogData();
+      setCatalog(data);
+
+      setIsCreatingProcedure(false);
+      setNewProcedureData({ name: '', categoryId: 0, moduleId: 0 });
+    } else {
+      alert('Erro ao criar procedimento: ' + result.error);
+    }
   };
 
   const PriceMenu: React.FC<{ proc: Procedimento, menu: 'main' | 'sidebar' }> = ({ proc, menu }) => {
@@ -289,138 +393,6 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
   if (loading) {
     return (<div className="flex h-screen items-center justify-center text-zinc-500"><Loader2 className="animate-spin mr-2" /> Carregando catálogo...</div>);
-  }
-
-  const CartSidebar = () => {
-    const [activeTab, setActiveTab] = useState<'itens' | 'prazos'>('itens');
-
-    const TabButton: React.FC<{
-      label: string;
-      icon: React.ElementType;
-      isActive: boolean;
-      onClick: () => void;
-    }> = ({ label, icon: Icon, isActive, onClick }) => (
-      <button
-        onClick={onClick}
-        className={cn(
-          'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors',
-          isActive
-            ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-            : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-        )}
-      >
-        <Icon size={16} />
-        {label}
-      </button>
-    );
-
-    return (
-      <>
-        <div onClick={() => setIsCartOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-backdrop-fade-in"></div>
-        <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-stone-50 dark:bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-50 flex flex-col animate-cart-slide-in">
-          <div className="p-4 border-b dark:border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg"><ShoppingCart size={20} /></div>
-              <div>
-                <h2 className="font-bold text-lg">Resumo da Proposta</h2>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-              </div>
-            </div>
-            <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><XIcon size={20} /></button>
-          </div>
-
-          <div className="border-b dark:border-white/10 flex">
-            <TabButton label="Itens" icon={ListTodo} isActive={activeTab === 'itens'} onClick={() => setActiveTab('itens')} />
-            <TabButton label="Prazos" icon={CalendarClock} isActive={activeTab === 'prazos'} onClick={() => setActiveTab('prazos')} />
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {activeTab === 'itens' && (
-              <div className="space-y-3">
-                {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
-                {summaryItems.map(item => (
-                  <div key={item.procedimento.id} className="p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10">
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm">{item.procedimento.nome}</p>
-                      <div className="flex items-center gap-2 mt-1 relative">
-                        <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
-                          <Tag size={12} />
-                          <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
-                        </button>
-
-                        {editingPrice?.procId === item.procedimento.id ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={editingPrice.price}
-                            onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
-                            onBlur={handleSaveManualPrice}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
-                            className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
-                            autoFocus
-                          />
-                        ) : (
-                          <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400" /></span>
-                        )}
-                        {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
-                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
-                      <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
-                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
-                    </div>
-                    <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeTab === 'prazos' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-2 flex items-center gap-2"><CalendarPlus size={16} /> Data Global</label>
-                  <div className="flex gap-2">
-                    <input type="date" value={globalDeliveryDate} onChange={e => setGlobalDeliveryDate(e.target.value)} className="flex-1 w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none" />
-                    <button onClick={handleApplyGlobalDate} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold">Aplicar</button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm flex items-center gap-2"><ListTodo size={16} /> Datas Individuais</h3>
-                  {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Adicione itens para definir prazos.</p>}
-                  {summaryItems.map(item => (
-                    <div key={item.procedimento.id} className="flex items-center justify-between p-2 bg-white dark:bg-zinc-800/50 rounded-lg border dark:border-white/10">
-                      <p className="text-sm flex-1 pr-2 truncate">{item.procedimento.nome}</p>
-                      <input type="date" value={deliveryDates[item.procedimento.id] || ''} onChange={e => setDeliveryDates(prev => ({ ...prev, [item.procedimento.id]: e.target.value }))} className="bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 mt-auto border-t border-white/20 dark:border-white/10">
-            <button
-              onClick={handleCreateProposal}
-              disabled={submitting || summaryItems.length === 0 || !selectedClientId}
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold transition-all duration-200 active:scale-95 shadow-lg bg-blue-600/90 hover:bg-blue-500 text-white shadow-blue-500/30 disabled:bg-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  <span>Salvando...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={20} />
-                  <span>Criar Proposta</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </>
-    );
   }
 
   return (
@@ -454,12 +426,21 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
             onCreateNew={() => setIsCreatingClient(true)}
             className="w-full md:w-2/3"
           />
-          <SearchBar
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder="Buscar procedimento..."
-            className="w-full md:w-1/3"
-          />
+          <div className="flex items-center gap-2 w-full md:w-1/3">
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Buscar procedimento..."
+              className="flex-1"
+            />
+            <button
+              onClick={() => setIsCreatingProcedure(true)}
+              className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              title="Adicionar Novo Procedimento"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -525,7 +506,173 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         </div>
       </main>
 
-      {isCartOpen && <CartSidebar />}
+      {isCartOpen && (
+        <>
+          <div onClick={() => setIsCartOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-backdrop-fade-in"></div>
+          <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-stone-50 dark:bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-50 flex flex-col animate-cart-slide-in">
+            <div className="p-4 border-b dark:border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg"><ShoppingCart size={20} /></div>
+                <div>
+                  <h2 className="font-bold text-lg">Resumo da Proposta</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">
+                    {catalog.clientes.find(c => String(c.id) === selectedClientId)?.nome || 'Cliente Selecionado'}
+                  </p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><XIcon size={20} /></button>
+            </div>
+
+            <div className="border-b dark:border-white/10 flex">
+              <button
+                onClick={() => setCartActiveTab('itens')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors',
+                  cartActiveTab === 'itens'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                )}
+              >
+                <ListTodo size={16} />
+                Itens
+              </button>
+              <button
+                onClick={() => setCartActiveTab('prazos')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors',
+                  cartActiveTab === 'prazos'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                )}
+              >
+                <CalendarClock size={16} />
+                Prazos
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {cartActiveTab === 'itens' && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center px-1 mb-2">
+                    <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Itens ({summaryItems.length})</span>
+                    <div className="relative">
+                      <button
+                        onClick={() => setOpenGlobalPriceMenu(!openGlobalPriceMenu)}
+                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1"
+                      >
+                        <Tag size={12} /> Aplicar modalidade a todos
+                      </button>
+                      {openGlobalPriceMenu && (
+                        <div className="absolute top-full right-0 mt-1 w-48 bg-white dark:bg-zinc-800 rounded-lg shadow-xl border dark:border-white/10 z-50 animate-fade-in p-1">
+                          {Object.keys(priceTiers).map((key) => {
+                            const tier = key as PriceTierKey;
+                            return (
+                              <button
+                                key={tier}
+                                onClick={() => handleApplyModeToAll(tier)}
+                                className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white block text-zinc-700 dark:text-zinc-200"
+                              >
+                                {priceTiers[tier]}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
+                  {summaryItems.map(item => (
+                    <div key={item.procedimento.id} className="p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10">
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">{item.procedimento.nome}</p>
+                        <div className="flex items-center gap-2 mt-1 relative">
+                          <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                            <Tag size={12} />
+                            <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
+                          </button>
+
+                          {editingPrice?.procId === item.procedimento.id ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingPrice.price}
+                              onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
+                              onBlur={handleSaveManualPrice}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
+                              className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                              autoFocus
+                            />
+                          ) : (
+                            <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400" /></span>
+                          )}
+                          {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
+                        <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
+                        <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                        <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
+                      </div>
+                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {cartActiveTab === 'prazos' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2"><CalendarPlus size={16} /> Data Global</label>
+                    <div className="flex gap-2">
+                      <input type="date" value={globalDeliveryDate} onChange={e => setGlobalDeliveryDate(e.target.value)} className="flex-1 w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none" />
+                      <button onClick={handleApplyGlobalDate} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold">Aplicar</button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm flex items-center gap-2"><ListTodo size={16} /> Datas Individuais</h3>
+                    {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Adicione itens para definir prazos.</p>}
+                    {summaryItems.map(item => (
+                      <div key={item.procedimento.id} className="flex items-center justify-between p-2 bg-white dark:bg-zinc-800/50 rounded-lg border dark:border-white/10">
+                        <p className="text-sm flex-1 pr-2 truncate">{item.procedimento.nome}</p>
+                        <input type="date" value={deliveryDates[item.procedimento.id] || ''} onChange={e => setDeliveryDates(prev => ({ ...prev, [item.procedimento.id]: e.target.value }))} className="bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 mt-auto border-t border-white/20 dark:border-white/10">
+              <button
+                onClick={handleCreateProposal}
+                disabled={submitting || summaryItems.length === 0 || !selectedClientId}
+                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold transition-all duration-200 active:scale-95 shadow-lg bg-blue-600/90 hover:bg-blue-500 text-white shadow-blue-500/30 disabled:bg-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    <span>Criar Proposta</span>
+                  </>
+                )}
+              </button>
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={handleClearCart}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                >
+                  <Trash size={14} /> Limpar Carrinho
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {isCreatingClient && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
@@ -579,6 +726,68 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         </div>
       )}
 
-    </div>
+      {isCreatingProcedure && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
+              <h3 className="font-bold text-zinc-800 dark:text-white">Novo Procedimento</h3>
+              <button onClick={() => setIsCreatingProcedure(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
+                <input
+                  type="text"
+                  value={newProcedureData.name}
+                  onChange={e => setNewProcedureData({ ...newProcedureData, name: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  placeholder="Nome do Procedimento"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Módulo</label>
+                <select
+                  value={newProcedureData.moduleId}
+                  onChange={e => setNewProcedureData({ ...newProcedureData, moduleId: Number(e.target.value), categoryId: 0 })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none appearance-none"
+                >
+                  <option value={0}>Selecione um módulo</option>
+                  {catalog.modulos.map(m => (
+                    <option key={m.id} value={m.id}>{m.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Categoria *</label>
+                <select
+                  value={newProcedureData.categoryId}
+                  onChange={e => setNewProcedureData({ ...newProcedureData, categoryId: Number(e.target.value) })}
+                  disabled={!newProcedureData.moduleId}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none appearance-none disabled:opacity-50"
+                >
+                  <option value={0}>Selecione uma categoria</option>
+                  {catalog.categorias
+                    .filter(c => c.idmodulo === newProcedureData.moduleId)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                </select>
+              </div>
+              <button
+                onClick={handleCreateProcedure}
+                disabled={isSavingNewProcedure || !newProcedureData.name.trim() || !newProcedureData.categoryId}
+                className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                {isSavingNewProcedure ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                Criar Procedimento
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+      }
+
+    </div >
   );
 };
