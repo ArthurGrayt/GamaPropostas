@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure } from '../services/mockData';
+import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
 import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash } from 'lucide-react';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
@@ -65,6 +65,11 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
   const [isSavingNewClient, setIsSavingNewClient] = useState(false);
+
+  // Client Modality Persistence
+  const [showModalityConfirmation, setShowModalityConfirmation] = useState<{ show: boolean, newModality: PriceTierKey | null }>({ show: false, newModality: null });
+  const [activeClientModality, setActiveClientModality] = useState<PriceTierKey>('preco_avulso');  // Default
+  const [modalityMenuOpen, setModalityMenuOpen] = useState(false);
 
   // New Procedure State
   const [isCreatingProcedure, setIsCreatingProcedure] = useState(false);
@@ -132,6 +137,43 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
       // Optionally reset client
       if (catalog.clientes.length > 0) setSelectedClientId(String(catalog.clientes[0].id));
+    }
+  }
+
+
+  // Handle Client Selection & Auto-Modality
+  useEffect(() => {
+    if (selectedClientId) {
+      const client = catalog.clientes.find(c => String(c.id) === selectedClientId);
+      if (client && client.modalidade) {
+        // Auto-apply stored modality
+        const storedModality = client.modalidade as PriceTierKey;
+        if (priceTiers[storedModality]) {
+          setActiveClientModality(storedModality);
+        }
+      }
+    }
+  }, [selectedClientId, catalog.clientes]);
+
+  const handleManualModalityChange = (tier: PriceTierKey) => {
+    setActiveClientModality(tier);
+    setModalityMenuOpen(false);
+    setShowModalityConfirmation({ show: true, newModality: tier });
+  };
+
+  const confirmModalityAssociation = async (persist: boolean) => {
+    if (persist && showModalityConfirmation.newModality && selectedClientId) {
+      await updateClientModality(selectedClientId, showModalityConfirmation.newModality);
+      // Update local catalog to reflect change avoid re-fetch
+      setCatalog(prev => ({
+        ...prev,
+        clientes: prev.clientes.map(c => String(c.id) === selectedClientId ? { ...c, modalidade: showModalityConfirmation.newModality! } : c)
+      }));
+    }
+    setShowModalityConfirmation({ show: false, newModality: null });
+
+    if (showModalityConfirmation.newModality) {
+      handleApplyModeToAll(showModalityConfirmation.newModality);
     }
   };
 
@@ -209,7 +251,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       if (newState[procId]) {
         newState[procId] = { ...newState[procId], quantity: newState[procId].quantity + 1 };
       } else {
-        newState[procId] = { quantity: 1, priceTier: 'preco_avulso' };
+        newState[procId] = { quantity: 1, priceTier: activeClientModality };
       }
       return newState;
     });
@@ -419,13 +461,45 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         </div>
 
         <div className="flex flex-col md:flex-row items-center gap-3 mb-3">
-          <ClientSelector
-            clients={catalog.clientes}
-            selectedClientId={selectedClientId}
-            onSelect={setSelectedClientId}
-            onCreateNew={() => setIsCreatingClient(true)}
-            className="w-full md:w-2/3"
-          />
+          <div className="w-full md:w-2/3 flex items-center gap-2">
+            <ClientSelector
+              clients={catalog.clientes}
+              selectedClientId={selectedClientId}
+              onSelect={setSelectedClientId}
+              onCreateNew={() => setIsCreatingClient(true)}
+              className="flex-1"
+            />
+            <div className="relative z-20">
+              <button
+                onClick={() => setModalityMenuOpen(!modalityMenuOpen)}
+                className="h-[52px] px-4 bg-zinc-100 dark:bg-zinc-800 border border-transparent dark:border-zinc-700 hover:border-blue-500 text-zinc-700 dark:text-zinc-300 rounded-xl flex flex-col items-start justify-center text-xs transition-all w-40"
+                title="Alterar modalidade padrão do cliente"
+              >
+                <span className="text-[10px] uppercase text-zinc-400 font-bold tracking-wider">Modalidade</span>
+                <span className="font-semibold text-sm truncate w-full text-left">{priceTiers[activeClientModality]}</span>
+              </button>
+
+              {modalityMenuOpen && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border dark:border-zinc-800 z-50 animate-fade-in overflow-hidden">
+                  {Object.keys(priceTiers).map((key) => {
+                    const tier = key as PriceTierKey;
+                    return (
+                      <button
+                        key={tier}
+                        onClick={() => handleManualModalityChange(tier)}
+                        className={cn(
+                          "w-full text-left text-sm px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 block text-zinc-700 dark:text-zinc-200 border-b border-zinc-100 dark:border-zinc-800 last:border-0",
+                          activeClientModality === tier ? "bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 font-medium" : ""
+                        )}
+                      >
+                        {priceTiers[tier]}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-2 w-full md:w-1/3">
             <SearchBar
               value={searchQuery}
@@ -788,6 +862,36 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       )
       }
 
-    </div >
+      {showModalityConfirmation.show && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 mx-auto mb-4">
+                <Tag size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Salvar Preferência?</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+                Deseja associar esse cliente a essa modalidade <strong>({showModalityConfirmation.newModality ? priceTiers[showModalityConfirmation.newModality] : ''})</strong> permanentemente?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => confirmModalityAssociation(false)}
+                  className="flex-1 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  Apenas Agora
+                </button>
+                <button
+                  onClick={() => confirmModalityAssociation(true)}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-colors"
+                >
+                  Sim, Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 };

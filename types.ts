@@ -11,6 +11,7 @@ export interface Client {
   avatar?: string; // Optional, might not exist in DB
   cliente_propostas?: number[]; // Array of proposal IDs
   clientefrequente?: boolean;
+  modalidade?: string; // Preferred price tier
 }
 
 export interface Modulo {

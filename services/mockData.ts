@@ -96,7 +96,8 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
         razao_social: rawClient.razao_social,
         avatar: rawClient.avatar,
         cliente_propostas: rawClient.cliente_propostas || [],
-        clientefrequente: rawClient.clientefrequente
+        clientefrequente: rawClient.clientefrequente,
+        modalidade: rawClient.modalidade
       };
     });
 
@@ -769,5 +770,20 @@ export const createNewClient = async (
   } catch (e: any) {
     console.error("Error creating client:", e.message);
     return { success: false, error: e.message };
+  }
+};
+
+export const updateClientModality = async (clientId: string, modality: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('clientes')
+      .update({ modalidade: modality })
+      .filter('id', 'eq', clientId); // Using filter locally or eq if exact match works
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error("Error updating client modality:", error);
+    return false;
   }
 };
