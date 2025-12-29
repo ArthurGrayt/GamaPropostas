@@ -136,7 +136,7 @@ const MainApp: React.FC = () => {
         <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-pink-400/20 rounded-full blur-[100px] animate-pulse-slow delay-700"></div>
       </div>
 
-      <nav className="absolute top-4 right-4 z-50 flex items-center gap-2">
+      <nav className="absolute top-4 right-8 z-50 flex items-center gap-2">
         {/* User Info */}
         {user && (
           <div className="hidden sm:flex flex-col items-end text-right mr-2">
@@ -147,7 +147,7 @@ const MainApp: React.FC = () => {
 
         <button
           onClick={navigateToClients}
-          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
           aria-label="Gerenciar Clientes"
         >
           <User size={18} />
@@ -155,7 +155,7 @@ const MainApp: React.FC = () => {
 
         <button
           onClick={navigateToSettings}
-          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
           aria-label="Editar Preços"
         >
           <SlidersHorizontal size={18} />
@@ -163,7 +163,7 @@ const MainApp: React.FC = () => {
 
         <button
           onClick={toggleTheme}
-          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
           aria-label="Alternar tema"
         >
           {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
