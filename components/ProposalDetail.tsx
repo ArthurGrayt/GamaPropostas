@@ -827,7 +827,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                 className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
                             >
                                 {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-                                Criar Cliente
+                                + Criar Cliente
                             </button>
                         </div>
                     </div>
