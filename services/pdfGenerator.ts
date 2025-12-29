@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFString } from 'pdf-lib';
 import { EnrichedProposal, EnrichedItem } from '../types';
+import { logAction } from './logger';
 
 // --- Constants ---
 const PRIMARY_COLOR = '#07889B';
@@ -293,6 +294,9 @@ export const generateProposalPdf = async (proposal: EnrichedProposal): Promise<v
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    // Log Export Action
+    await logAction('EXPORT', `Exportou proposta #${proposal.id} em PDF`, { proposal_id: proposal.id });
 
   } catch (error) {
     console.error("Error generating PDF:", error);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { logAction } from '../services/logger';
 import { Loader2, Lock, Mail, ArrowRight } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
@@ -21,6 +22,8 @@ export const LoginPage: React.FC = () => {
         if (error) {
             setError(error.message);
             setLoading(false);
+        } else {
+            await logAction('LOGIN', 'Realizou login no sistema');
         }
     };
 
