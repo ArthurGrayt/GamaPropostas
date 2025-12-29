@@ -121,7 +121,7 @@ export const LoginPage: React.FC = () => {
                     {/* Footer */}
                     <div className="mt-8 text-center">
                         <p className="text-xs text-zinc-400 dark:text-zinc-600">
-                            &copy; {new Date().getFullYear()} Gama. Acesso Restrito.
+                            &copy; {new Date().getFullYear()} Gama Center. Acesso Restrito.
                         </p>
                     </div>
                 </div>
