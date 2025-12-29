@@ -6,7 +6,7 @@ import { ClientManagement } from './components/ClientManagement';
 import { PriceEditor } from './components/PriceEditor';
 import { getProposals, getProposalById, updateProposalStatus } from './services/mockData';
 import { EnrichedProposal, ProposalStatus } from './types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut, User, SlidersHorizontal, Sun, Moon } from 'lucide-react';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { LoginPage } from './components/LoginPage';
 
@@ -136,8 +136,8 @@ const MainApp: React.FC = () => {
         <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-pink-400/20 rounded-full blur-[100px] animate-pulse-slow delay-700"></div>
       </div>
 
-      <nav className="absolute top-4 right-4 z-50 flex items-center gap-4">
-        {/* User Info (Optional) */}
+      <nav className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        {/* User Info */}
         {user && (
           <div className="hidden sm:flex flex-col items-end text-right mr-2">
             <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Logado como</span>
@@ -146,10 +146,35 @@ const MainApp: React.FC = () => {
         )}
 
         <button
-          onClick={signOut}
-          className="px-4 py-2 bg-white/50 dark:bg-black/50 hover:bg-red-500/10 hover:text-red-500 backdrop-blur-md rounded-xl text-sm font-medium border border-zinc-200 dark:border-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+          onClick={navigateToClients}
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
+          aria-label="Gerenciar Clientes"
         >
-          Sair
+          <User size={18} />
+        </button>
+
+        <button
+          onClick={navigateToSettings}
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
+          aria-label="Editar Preços"
+        >
+          <SlidersHorizontal size={18} />
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
+          aria-label="Alternar tema"
+        >
+          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <button
+          onClick={signOut}
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-white/50 dark:bg-black/50 hover:bg-red-500/10 text-zinc-600 dark:text-zinc-400 hover:text-red-500 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 transition-all active:scale-95"
+          aria-label="Sair"
+        >
+          <LogOut size={18} />
         </button>
       </nav>
 
@@ -175,11 +200,7 @@ const MainApp: React.FC = () => {
             proposals={proposals}
             onSelect={navigateToDetail}
             onStatusChange={handleQuickStatusUpdate}
-            isDarkMode={isDarkMode}
-            onToggleTheme={toggleTheme}
             onCreate={navigateToCreate}
-            onNavigateToSettings={navigateToSettings}
-            onNavigateToClients={navigateToClients}
           />
         ) : view === 'CREATE' ? (
           <ProposalCreate

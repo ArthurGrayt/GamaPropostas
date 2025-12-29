@@ -1,26 +1,21 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { EnrichedProposal, ProposalStatus } from '../types';
 import { GlassCard, Avatar, SearchBar, FilterPill } from './UIComponents';
-import { ChevronRight, Calendar, DollarSign, CheckCircle, XCircle, Clock, Moon, Sun, Archive, Plus, SlidersHorizontal, FileText, Loader2, User, ListTodo } from 'lucide-react';
+import { ChevronRight, Calendar, DollarSign, CheckCircle, XCircle, Clock, Archive, Plus, FileText, Loader2, ListTodo } from 'lucide-react';
 import { generateProposalPdf } from '../services/pdfGenerator';
 import { getProposalById } from '../services/mockData';
 
 
 interface Props {
     proposals: EnrichedProposal[];
-    onSelect: (id: number) => void;
     onStatusChange: (id: number, newStatus: ProposalStatus) => void;
-    isDarkMode: boolean;
-    onToggleTheme: () => void;
-    onCreate: () => void;
 
-    onNavigateToSettings: () => void;
-    onNavigateToClients: () => void;
+    onCreate: () => void;
 }
 
 type FilterType = 'ALL' | ProposalStatus;
 
-export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusChange, isDarkMode, onToggleTheme, onCreate, onNavigateToSettings, onNavigateToClients }) => {
+export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusChange, onCreate }) => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
@@ -151,29 +146,7 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={onNavigateToClients}
-                        className="w-12 h-12 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
-                        aria-label="Gerenciar Clientes"
-                    >
-                        <User size={22} />
-                    </button>
-                    <button
-                        onClick={onNavigateToSettings}
-                        className="w-12 h-12 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
-                        aria-label="Editar Preços"
-                    >
-                        <SlidersHorizontal size={22} />
-                    </button>
-                    <button
-                        onClick={onToggleTheme}
-                        className="w-12 h-12 rounded-full flex items-center justify-center bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm text-zinc-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-zinc-700/80 transition-all active:scale-95"
-                        aria-label="Alternar tema"
-                    >
-                        {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-                    </button>
-                </div>
+
             </header>
 
             {/* Barra de Busca e Filtros */}
