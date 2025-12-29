@@ -7,15 +7,19 @@ import { PriceEditor } from './components/PriceEditor';
 import { getProposals, getProposalById, updateProposalStatus } from './services/mockData';
 import { EnrichedProposal, ProposalStatus } from './types';
 import { Loader2 } from 'lucide-react';
+import { AuthProvider, useAuth } from './components/AuthProvider';
+import { LoginPage } from './components/LoginPage';
 
 type ViewState = 'LIST' | 'DETAIL' | 'CREATE' | 'SETTINGS' | 'CLIENTS';
 
-const App: React.FC = () => {
+// Main Content Component (Protected)
+const MainApp: React.FC = () => {
   const [view, setView] = useState<ViewState>('LIST');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [proposals, setProposals] = useState<EnrichedProposal[]>([]);
   const [selectedProposal, setSelectedProposal] = useState<EnrichedProposal | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { signOut, user } = useAuth();
 
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -132,6 +136,23 @@ const App: React.FC = () => {
         <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-pink-400/20 rounded-full blur-[100px] animate-pulse-slow delay-700"></div>
       </div>
 
+      <nav className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        {/* User Info (Optional) */}
+        {user && (
+          <div className="hidden sm:flex flex-col items-end text-right mr-2">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Logado como</span>
+            <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200">{user.email}</span>
+          </div>
+        )}
+
+        <button
+          onClick={signOut}
+          className="px-4 py-2 bg-white/50 dark:bg-black/50 hover:bg-red-500/10 hover:text-red-500 backdrop-blur-md rounded-xl text-sm font-medium border border-zinc-200 dark:border-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+        >
+          Sair
+        </button>
+      </nav>
+
       <main className={
         view === 'CREATE' || view === 'SETTINGS'
           ? 'h-screen'
@@ -141,6 +162,13 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-500">
             <Loader2 className="w-10 h-10 animate-spin mb-4 text-blue-500" />
             <p className="animate-pulse">Carregando dados da nuvem...</p>
+            <p className="text-xs mt-4 text-zinc-400">Isso pode levar alguns segundos.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-8 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg text-sm hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
+            >
+              Recarregar Página
+            </button>
           </div>
         ) : view === 'LIST' ? (
           <ProposalList
@@ -178,6 +206,20 @@ const App: React.FC = () => {
       </main>
     </div>
   );
+};
+
+// Root App Component (Auth Wrapper)
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AuthWrapper />
+    </AuthProvider>
+  );
+};
+
+const AuthWrapper: React.FC = () => {
+  const { session } = useAuth();
+  return session ? <MainApp /> : <LoginPage />;
 };
 
 export default App;
