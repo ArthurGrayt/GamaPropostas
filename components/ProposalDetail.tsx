@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento } from '../types';
+import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector } from './UIComponents';
-import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil } from 'lucide-react';
-import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient } from '../services/mockData';
+import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar } from 'lucide-react';
+import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
 interface Props {
@@ -130,8 +130,29 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         setIsUpdating(false);
     };
 
+    // Doc Seg Modal State
+    const [isDocSegModalOpen, setIsDocSegModalOpen] = useState(false);
+    const [docSegItem, setDocSegItem] = useState<EnrichedItem | null>(null);
+    const [docSegPrazo, setDocSegPrazo] = useState('');
+    const [docSegObs, setDocSegObs] = useState('');
+    const [isSavingDocSeg, setIsSavingDocSeg] = useState(false);
+
     const handleItemStatusUpdate = async (itemId: number, uiKey: string, newStatus: ItemStatus) => {
         setOpenStatusMenu(null);
+
+        // Intercept APPROVED status to open Doc Seg Modal
+        if (newStatus === 'APPROVED') {
+            const item = items.find(i => i.id === itemId);
+            if (item) {
+                setDocSegItem(item);
+                setDocSegPrazo('');
+                setDocSegObs('');
+                // Default deadline to 30 days from now? Or simple empty. User requested to insert.
+                setIsDocSegModalOpen(true);
+                return;
+            }
+        }
+
         await updateItemStatus(itemId, newStatus);
 
         // Reverse Sync: If all items become the SAME status, update the proposal status
@@ -210,6 +231,63 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
             await updateProposalStatus(proposal.id, 'ARCHIVED');
             onUpdate();
             onBack();
+        }
+    };
+
+    const handleConfirmDocSeg = async () => {
+        if (!docSegItem) return;
+        if (!docSegPrazo) {
+            alert("Por favor, informe o prazo.");
+            return;
+        }
+        if (!proposal.unidade_id) {
+            alert('A proposta precisa estar vinculada a uma unidade para gerar documentos.');
+            return;
+        }
+
+        setIsSavingDocSeg(true);
+        try {
+            // Create Doc Seg Record
+            const docSegData: DocSeg = {
+                mes: new Date().getMonth() + 1,
+                empresa: proposal.unidade_id,
+                doc: docSegItem.procedimento.id,
+                valor: docSegItem.total || docSegItem.preco || 0,
+                status: 'Pendente',
+                data_recebimento: new Date().toISOString(),
+                prazo: new Date(docSegPrazo).toISOString(),
+                data_entrega: new Date(docSegPrazo).toISOString(), // Defaulting delivery target to deadline
+                enviado: false,
+                obs: docSegObs
+            };
+
+            await createDocSeg(docSegData);
+
+            // Update Item Status to APPROVED
+            await updateItemStatus(docSegItem.id, 'APPROVED');
+
+            // Trigger Reverse Sync Logic
+            const newStatus = 'APPROVED';
+            // We need to re-fetch items or simulate the change to check if all are approved
+            // Since state might not correspond to latest DB, checking local items array (which is from props).
+            // Ideally we should rely on onUpdate to refresh everything, but to start the "All Approved" sync we check here.
+
+            // Simple check: if all OTHER items are already APPROVED, then this one makes it complete.
+            const otherItems = items.filter(i => i.id !== docSegItem.id);
+            const allOthersApproved = otherItems.every(i => i.status === 'APPROVED');
+
+            if (allOthersApproved && currentStatus !== 'APPROVED') {
+                await updateProposalStatus(proposal.id, 'APPROVED');
+                setCurrentStatus('APPROVED');
+            }
+
+            setIsDocSegModalOpen(false);
+            onUpdate();
+        } catch (error) {
+            console.error("Error creating doc seg:", error);
+            alert("Erro ao criar documento de segurança. Verifique o console.");
+        } finally {
+            setIsSavingDocSeg(false);
         }
     };
 
@@ -803,6 +881,70 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                             >
                                 {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                                 + Criar Cliente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Doc Seg Modal */}
+            {isDocSegModalOpen && docSegItem && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
+                        <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Gerar Documento de Segurança</h3>
+                            <button onClick={() => setIsDocSegModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                Para aprovar o item <span className="font-bold text-zinc-800 dark:text-white">{docSegItem.procedimento.nome}</span>, é necessário gerar o documento de segurança.
+                            </p>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Prazo de Entrega</label>
+                                <div className="relative">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                                    <input
+                                        type="date"
+                                        value={docSegPrazo}
+                                        onChange={(e) => setDocSegPrazo(e.target.value)}
+                                        className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all dark:text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Observações</label>
+                                <textarea
+                                    value={docSegObs}
+                                    onChange={(e) => setDocSegObs(e.target.value)}
+                                    placeholder="Observações adicionais..."
+                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 flex-wrap">
+                            <button
+                                onClick={() => setIsDocSegModalOpen(false)}
+                                className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => handleConfirmDocSeg(false)}
+                                disabled={isSavingDocSeg}
+                                className="px-4 py-2 rounded-lg bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-white font-medium transition-colors disabled:opacity-50 text-sm"
+                            >
+                                Confirmar e Aprovar
+                            </button>
+                            <button
+                                onClick={() => handleConfirmDocSeg(true)}
+                                disabled={isSavingDocSeg}
+                                className="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold shadow-lg shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
+                            >
+                                {isSavingDocSeg ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                Confirmar e ir para Gama Seg
                             </button>
                         </div>
                     </div>

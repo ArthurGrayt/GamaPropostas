@@ -792,6 +792,21 @@ export const updateProposalClient = async (proposalId: number, newClientId: stri
   }
 };
 
+export const createDocSeg = async (docSeg: any) => {
+  const { data, error } = await supabase
+    .from('doc_seg')
+    .insert([docSeg])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating doc_seg:', error);
+    throw error;
+  }
+  await logAction('CREATE', `Criou documento de segurança para item #${docSeg.doc}`, { doc_seg: docSeg });
+  return data;
+};
+
 export const createNewClient = async (
   nomeFantasia: string,
   razaoSocial: string,

@@ -13,6 +13,21 @@ export interface Unit {
   state?: string;
 }
 
+export interface DocSeg {
+  id?: number;
+  created_at?: string;
+  mes: number;
+  empresa: number; // Unit ID
+  doc: number; // Procedure ID
+  valor?: number;
+  status: string;
+  data_recebimento: string; // ISO Date
+  prazo: string; // ISO Date
+  data_entrega: string; // ISO Date
+  enviado: boolean;
+  obs?: string;
+}
+
 export interface Client {
   id: string; // UUID
   nome: string; // Display name (fallback or derived)
