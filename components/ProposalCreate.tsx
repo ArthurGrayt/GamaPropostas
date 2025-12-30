@@ -545,7 +545,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                     const unitPrice = selected?.manualPrice ?? (proc[selected?.priceTier || 'preco_avulso'] ?? proc.preco_avulso ?? 0);
 
                     return (
-                      <GlassCard key={proc.id} className="p-4 shadow-md">
+                      <GlassCard key={proc.id} className={`p-4 shadow-md relative transition-all ${openPriceMenu === proc.id ? 'z-50' : 'z-0'}`}>
                         <div className="flex justify-between items-start">
                           <div className="flex-1 pr-4">
                             <h4 className="font-semibold mb-2">{proc.nome}</h4>
@@ -657,7 +657,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                   </div>
                   {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
                   {summaryItems.map(item => (
-                    <div key={item.procedimento.id} className="p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10">
+                    <div key={item.procedimento.id} className={`p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10 relative transition-all ${openSidebarPriceMenu === item.procedimento.id ? 'z-50' : 'z-0'}`}>
                       <div className="flex-1">
                         <p className="font-semibold text-sm">{item.procedimento.nome}</p>
                         <div className="flex items-center gap-2 mt-1 relative">

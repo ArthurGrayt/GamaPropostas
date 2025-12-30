@@ -620,7 +620,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                     <div className={`p-2 rounded-full bg-stone-100 dark:bg-zinc-800 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}><ChevronDown size={16} /></div>
                                 </div>
 
-                                <div className={`space-y-6 transition-all duration-500 ease-spring ${openStatusMenu !== null ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
+                                <div className={`space-y-6 transition-all duration-500 ease-spring px-1 pb-4 ${openStatusMenu !== null || editingItem !== null ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
                                     {Object.entries(moduleData.categorias).map(([catId, data]) => {
                                         const catData = data as CategoryGroup;
                                         return (
@@ -639,7 +639,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                         return (
                                                             <GlassCard
                                                                 key={item.uiKey}
-                                                                className={`p-4 flex items-start justify-between group hover:border-blue-300/50 dark:hover:border-blue-500/30 relative transition-all ${openStatusMenu === item.uiKey ? 'z-20' : 'z-10'} ${isEditing ? 'border-blue-400/80 dark:border-blue-500/70 ring-2 ring-blue-500/20' : ''}`}
+                                                                className={`p-4 flex items-center justify-between group hover:border-blue-300/50 dark:hover:border-blue-500/30 relative transition-all ${openStatusMenu === item.uiKey || isEditing ? 'z-[50]' : 'z-10'} ${isEditing ? 'border-blue-400/80 dark:border-blue-500/70 ring-2 ring-blue-500/20' : ''}`}
                                                             >
                                                                 <div className="flex-1 pr-4">
                                                                     <h4 className="font-semibold text-zinc-800 dark:text-zinc-100 mb-1.5">{item.procedimento?.nome || 'Procedimento'}</h4>
