@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import { logAction } from './logger';
 import {
-  Proposta, ItemProposta, Procedimento, Categoria, Modulo, Client,
+  Proposta, ItemProposta, Procedimento, Categoria, Modulo, Client, Unit,
   EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus
 } from '../types';
 
@@ -11,6 +11,7 @@ export interface CatalogContext {
   categorias: Categoria[];
   procedimentos: Procedimento[];
   clientes: Client[];
+  unidades: Unit[];
 }
 
 type PriceTierKey = 'preco_avulso' | 'preco_particular' | 'preco_parceiro' | 'preco_clientegama' | 'preco_premium';
@@ -62,14 +63,20 @@ function enrichProposal(
     nome: displayName,
     nome_fantasia: rawClient.nome_fantasia,
     razao_social: rawClient.razao_social,
-    avatar: rawClient.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`
+    avatar: rawClient.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`,
+    units: context.unidades.filter(u => String(u.empresaid) === String(rawClient.id))
   } : {
     id: proposal.idcliente || 'unknown',
     nome: displayName,
+    nome_fantasia: displayName,
+    razao_social: displayName,
     avatar: 'https://ui-avatars.com/api/?name=Unknown'
   };
 
-  // 2. Resolve Items
+  // 2. Resolve Unit
+  const unit = context.unidades.find(u => u.id === proposal.unidade_id);
+
+  // 3. Resolve Items
   const rawItemIds = proposal.itensproposta || (proposal as any).itens_proposta;
   const itemIdsArray = Array.isArray(rawItemIds) ? rawItemIds.filter((x: any) => x != null) : [];
 
@@ -87,13 +94,10 @@ function enrichProposal(
     const modulo = context.modulos.find(m => m.id === categoria.idmodulo);
     if (!modulo) return null;
 
-    // Infer status from 'data_entregue' as 'status' column doesn't exist
-    // Update: 'status' column might exist now or we want to support it if it does.
-    // Prioritize explicit status if available, otherwise fall back to inference.
     let status: ItemStatus = (itemDef as any).status;
 
     if (!status) {
-      status = itemDef.data_entregue ? 'PRONTO PARA COBRANÇA' : 'NÃO INICIADO';
+      status = 'PENDING';
     }
 
     const unitPrice = itemDef.preco;
@@ -118,14 +122,10 @@ function enrichProposal(
       modulo,
       total,
       modalidade: inferredModalidade,
-      status, // Overwrite with inferred status
+      status,
     };
 
-    if (!finalItem.data_para_entrega) {
-      const proposalCreationDate = new Date(proposal.created_at);
-      proposalCreationDate.setDate(proposalCreationDate.getDate() + 7);
-      finalItem.data_para_entrega = proposalCreationDate.toISOString();
-    }
+
 
     return finalItem;
   };
@@ -151,6 +151,7 @@ function enrichProposal(
   return {
     ...proposal,
     cliente: client,
+    unidade: unit,
     itens: finalDisplayItems,
     totalValue
   };
@@ -177,14 +178,17 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
     const catRes = await safeFetch<Categoria>('categoria');
     const procRes = await safeFetch<Procedimento>('procedimento', 'procedimentos');
     const cliRes = await safeFetch<any>('clientes'); // Fetch as any to handle raw data
+    const unitRes = await safeFetch<Unit>('unidades');
 
     if (cliRes.error) console.error("Erro ao buscar clientes:", cliRes.error.message);
     if (modRes.error) console.error("Erro ao buscar módulos:", modRes.error.message);
+    if (unitRes.error) console.error("Erro ao buscar unidades:", unitRes.error.message);
 
     // --- FILTERING LOGIC START ---
     let finalModulos = modRes.data || [];
     let finalCategorias = catRes.data || [];
     let finalProcedimentos = procRes.data || [];
+    const finalUnits = unitRes.data || [];
 
     // Identify modules to hide (Módulo 14 and Contas)
     const modulesToHide = finalModulos.filter(m =>
@@ -223,7 +227,8 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
         avatar: rawClient.avatar,
         cliente_propostas: rawClient.cliente_propostas || [],
         clientefrequente: rawClient.clientefrequente,
-        modalidade: rawClient.modalidade
+        modalidade: rawClient.modalidade,
+        units: finalUnits.filter(u => String(u.empresaid) === String(rawClient.id))
       };
     });
 
@@ -232,10 +237,11 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
       categorias: finalCategorias,
       procedimentos: finalProcedimentos,
       clientes: mappedClients,
+      unidades: finalUnits,
     };
   } catch (e) {
     console.error("Critical error fetching catalog:", e);
-    return { modulos: [], categorias: [], procedimentos: [], clientes: [] };
+    return { modulos: [], categorias: [], procedimentos: [], clientes: [], unidades: [] };
   }
 };
 
@@ -332,13 +338,52 @@ export const getProposalById = async (id: number): Promise<EnrichedProposal | un
 };
 
 export const updateProposalStatus = async (id: number, status: ProposalStatus): Promise<void> => {
+  // 1. Update Proposal Status
   const { error } = await supabase
     .from('proposta')
     .update({ status })
     .eq('id', id);
 
-  if (error) console.error("Error updating status:", error);
-  else await logAction('UPDATE', `Atualizou status da proposta #${id} para '${status}'`, { proposal_id: id, new_status: status });
+  if (error) {
+    console.error("Error updating proposal status:", error);
+    return;
+  }
+
+  await logAction('UPDATE', `Atualizou status da proposta #${id} para '${status}'`, { proposal_id: id, new_status: status });
+
+  // 2. Cascading: Update All Items Status
+  // Only cascade for specific statuses if needed, but per requirement:
+  // "caso marquemos a proposta como "Aprovado" "Pendente" ou "Reprovado" TODOS os itens da proposta recebem o mesmo status"
+  if (status === 'APPROVED' || status === 'PENDING' || status === 'REJECTED') {
+    const itemStatus = status as ItemStatus; // Assuming mapped 1:1
+
+    // Need to find all items for this proposal.
+    // We can use the logic from getProposalById or deleteProposal to find items.
+    // But a direct update with a subquery or known FK is best.
+    // Since we don't have a guaranteed FK on items -> proposal in all schemas (sometimes array on proposal),
+    // we must fetch the proposal's item list first if we want to be safe.
+
+    const { data: proposalData } = await supabase
+      .from('proposta')
+      .select('itensproposta')
+      .eq('id', id)
+      .single();
+
+    const itemIds = proposalData?.itensproposta || [];
+
+    if (Array.isArray(itemIds) && itemIds.length > 0) {
+      const updatePayload: { status: string, data_entregue?: string | null } = { status: itemStatus };
+      if (status === 'APPROVED') updatePayload.data_entregue = new Date().toISOString();
+      if (status === 'PENDING') updatePayload.data_entregue = null;
+
+      const { error: itemsError } = await supabase
+        .from('itensproposta')
+        .update(updatePayload)
+        .in('id', itemIds);
+
+      if (itemsError) console.error("Error cascading status to items:", itemsError);
+    }
+  }
 };
 
 export const deleteProposal = async (proposalId: number): Promise<{ success: boolean; error?: string }> => {
@@ -431,9 +476,9 @@ export const updateItemStatus = async (itemId: number, status: ItemStatus): Prom
     status: status
   };
 
-  if (status === 'VALIDADO PELO CLIENTE' || status === 'PRONTO PARA COBRANÇA') {
+  if (status === 'APPROVED') {
     updatePayload.data_entregue = new Date().toISOString();
-  } else if (status === 'NÃO INICIADO') {
+  } else if (status === 'PENDING') {
     // Allow "un-delivering" an item
     updatePayload.data_entregue = null;
   }
@@ -521,7 +566,6 @@ export const addItemToProposal = async (
     procedimentoId: number;
     quantidade: number;
     preco: number;
-    data_para_entrega: string;
   }
 ): Promise<boolean> => {
   try {
@@ -532,7 +576,6 @@ export const addItemToProposal = async (
         idprocedimento: itemData.procedimentoId,
         quantidade: itemData.quantidade,
         preco: itemData.preco,
-        data_para_entrega: itemData.data_para_entrega,
       })
       .select('id')
       .single();
@@ -613,7 +656,8 @@ export const createProposal = async (
     quantidade: number;
     preco: number;
     data_para_entrega: string;
-  }[]
+  }[],
+  unitId?: number // Linked Unit ID
 ): Promise<boolean> => {
   try {
     // 1. Create Proposal record first (without items)
@@ -621,6 +665,7 @@ export const createProposal = async (
       .from('proposta')
       .insert({
         idcliente: clientId,
+        unidade_id: unitId || null,
         created_at: new Date().toISOString(),
         status: 'PENDING',
       })
@@ -640,7 +685,6 @@ export const createProposal = async (
       idprocedimento: i.procedimentoId,
       quantidade: i.quantidade,
       preco: i.preco,
-      data_para_entrega: i.data_para_entrega,
     }));
 
     const { data: itemsData, error: itemsError } = await supabase
@@ -749,14 +793,16 @@ export const updateProposalClient = async (proposalId: number, newClientId: stri
 };
 
 export const createNewClient = async (
-  name: string,
+  nomeFantasia: string,
+  razaoSocial: string,
   email?: string,
   phone?: string,
   proposalId?: number
 ): Promise<{ success: boolean; data?: Client; error?: string }> => {
   try {
     const payload: any = {
-      nome_fantasia: name,
+      nome_fantasia: nomeFantasia,
+      razao_social: razaoSocial,
       email: email || null,
       telefone: phone || null,
       clientefrequente: false,
@@ -776,16 +822,46 @@ export const createNewClient = async (
 
     const newClient: Client = {
       id: data.id,
-      nome: data.nome_fantasia || data.razao_social || name,
+      nome: data.nome_fantasia || data.razao_social || nomeFantasia,
       nome_fantasia: data.nome_fantasia,
       razao_social: data.razao_social,
       avatar: data.avatar
     };
 
-    await logAction('CREATE', `Cadastrou novo cliente: ${name}`, { client_name: name, client_id: data.id });
+    await logAction('CREATE', `Cadastrou novo cliente: ${nomeFantasia}`, { client_name: nomeFantasia, client_id: data.id });
     return { success: true, data: newClient };
   } catch (e: any) {
     console.error("Error creating client:", e.message);
+    return { success: false, error: e.message };
+  }
+};
+
+export const createUnit = async (
+  nome: string,
+  clientId: string
+): Promise<{ success: boolean; data?: Unit; error?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('unidades')
+      .insert({
+        nome_unidade: nome,
+        empresaid: clientId
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const newUnit: Unit = {
+      id: data.id,
+      nome_unidade: data.nome_unidade,
+      empresaid: data.empresaid
+    };
+
+    await logAction('CREATE', `Criou nova unidade: ${nome}`, { unit_name: nome, client_id: clientId });
+    return { success: true, data: newUnit };
+  } catch (e: any) {
+    console.error("Error creating unit:", e.message);
     return { success: false, error: e.message };
   }
 };

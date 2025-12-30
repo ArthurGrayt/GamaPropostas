@@ -197,8 +197,40 @@ class DynamicContentBuilder {
   }
 }
 
-export const generateProposalPdf = async (proposal: EnrichedProposal): Promise<void> => {
+export interface PdfOptions {
+  companyNameType: 'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA';
+  customCompanyName?: string; // If 'custom' is needed later, or we pass the resolved string directly
+}
+
+export const generateProposalPdf = async (proposal: EnrichedProposal, options?: PdfOptions): Promise<void> => {
   try {
+    // RESOLVE COMPANY NAME
+    let companyName = proposal.cliente.nome; // Default
+    if (options) {
+      if (options.companyNameType === 'RAZAO_SOCIAL' && proposal.cliente.razao_social) {
+        companyName = proposal.cliente.razao_social;
+      } else if (options.companyNameType === 'NOME_FANTASIA' && proposal.cliente.nome_fantasia) {
+        companyName = proposal.cliente.nome_fantasia;
+      }
+    }
+
+    // FILTER ITEMS - KEEP ONLY APPROVED
+    // We create a shallow copy of the proposal with filtered items to avoid mutating the original UI state if passed by reference (though usually safe here)
+    const approvedItems = proposal.itens.filter(i => i.status === 'APPROVED');
+
+    // If no items are approved, maybe we should warn? But requirement says "só deverá incluir itens marcados como aprovados".
+    // We'll proceed with approved items only.
+
+    const proposalForPdf: EnrichedProposal = {
+      ...proposal,
+      itens: approvedItems,
+      // We might want to temporarily override the client name in the object if DynamicContentBuilder uses it directly
+      cliente: {
+        ...proposal.cliente,
+        nome: companyName
+      }
+    };
+
     // 1. Fetch the Model PDF
     // Ensure the file is in the public folder and accessible via this URL
     const modelPdfBytes = await fetch('/model.pdf').then(res => {
@@ -210,7 +242,8 @@ export const generateProposalPdf = async (proposal: EnrichedProposal): Promise<v
     const modelDoc = await PDFDocument.load(modelPdfBytes);
 
     // 3. Generate Dynamic Content (Modules)
-    const dynamicBuilder = new DynamicContentBuilder(proposal);
+    // Pass the modified proposal with filtered items and resolved name
+    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf);
     const dynamicPdfBytes = dynamicBuilder.build();
     const dynamicDoc = await PDFDocument.load(dynamicPdfBytes);
 

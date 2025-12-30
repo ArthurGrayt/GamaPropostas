@@ -1,17 +1,28 @@
 
 export type ProposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'ARCHIVED';
 
-export type ItemStatus = 'NÃO INICIADO' | 'EM PROCESSO' | 'EM REVISÃO' | 'ENVIADO AO CLIENTE' | 'VALIDADO PELO CLIENTE' | 'PRONTO PARA COBRANÇA';
+export type ItemStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface Unit {
+  id: number;
+  nome_unidade: string;
+  empresaid: string; // Foreign Key to Client
+  nome_fantasia?: string;
+  razao_social?: string;
+  city?: string;
+  state?: string;
+}
 
 export interface Client {
   id: string; // UUID
-  nome: string; // Display name (mapped from nome_fantasia or razao_social)
-  nome_fantasia?: string;
-  razao_social?: string;
-  avatar?: string; // Optional, might not exist in DB
-  cliente_propostas?: number[]; // Array of proposal IDs
+  nome: string; // Display name (fallback or derived)
+  nome_fantasia: string; // Now required/primary
+  razao_social: string; // Now required/primary
+  avatar?: string;
+  cliente_propostas?: number[];
   clientefrequente?: boolean;
-  modalidade?: string; // Preferred price tier
+  modalidade?: string;
+  units?: Unit[]; // Hydrated list of units
 }
 
 export interface Modulo {
@@ -28,7 +39,7 @@ export interface Categoria {
 export interface Procedimento {
   id: number;
   nome: string;
-  preco: number; // Fallback price
+  preco: number;
   preco_avulso?: number | null;
   preco_particular?: number | null;
   preco_parceiro?: number | null;
@@ -41,17 +52,18 @@ export interface ItemProposta {
   id: number;
   idprocedimento: number;
   quantidade: number;
-  status?: ItemStatus; // Not a DB column, will be inferred.
-  preco?: number; // Price at the time of creation - RENAMED from preco_unitario
-  data_para_entrega?: string; // ISO Date string for the deadline
-  data_entregue?: string; // ISO Date string for when it was completed
+  status?: ItemStatus;
+  preco?: number;
+  data_para_entrega?: string;
+  data_entregue?: string;
 }
 
 export interface Proposta {
   id: number;
-  itensproposta: number[]; // Array of ItemProposta IDs
-  idcliente: string; // UUID
-  created_at: string; // ISO Date string
+  itensproposta: number[];
+  idcliente: string;
+  unidade_id?: number; // Linked Unit
+  created_at: string;
   status: ProposalStatus;
 }
 
@@ -68,6 +80,7 @@ export interface EnrichedItem extends Omit<ItemProposta, 'status'> {
 
 export interface EnrichedProposal extends Proposta {
   cliente: Client;
+  unidade?: Unit; // Enriched unit data
   itens: EnrichedItem[];
   totalValue: number;
 }

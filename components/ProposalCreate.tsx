@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality } from '../services/mockData';
+import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
 import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash } from 'lucide-react';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
@@ -42,7 +42,7 @@ type SummaryItem = {
 export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [catalog, setCatalog] = useState<CatalogContext>({ modulos: [], categorias: [], procedimentos: [], clientes: [] });
+  const [catalog, setCatalog] = useState<CatalogContext>({ modulos: [], categorias: [], procedimentos: [], clientes: [], unidades: [] });
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   const [openPriceMenu, setOpenPriceMenu] = useState<number | null>(null);
@@ -52,6 +52,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [openGlobalPriceMenu, setOpenGlobalPriceMenu] = useState(false);
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null);
   const [selectedItemsMap, setSelectedItemsMap] = useState<Record<number, SelectedItemState>>({});
   const [deliveryDates, setDeliveryDates] = useState<Record<number, string>>({});
   const [globalDeliveryDate, setGlobalDeliveryDate] = useState('');
@@ -63,7 +64,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [activeCategoriaId, setActiveCategoriaId] = useState<number | 'ALL'>('ALL');
 
   const [isCreatingClient, setIsCreatingClient] = useState(false);
-  const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
+  const [newClientData, setNewClientData] = useState({ nomeFantasia: '', razaoSocial: '', email: '', phone: '' });
   const [isSavingNewClient, setIsSavingNewClient] = useState(false);
 
   // Client Modality Persistence
@@ -92,6 +93,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
           if (Object.keys(parsed.selectedItemsMap || {}).length > 0) {
             setSelectedItemsMap(parsed.selectedItemsMap);
             if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
+            if (parsed.selectedUnitId) setSelectedUnitId(parsed.selectedUnitId);
             if (parsed.deliveryDates) setDeliveryDates(parsed.deliveryDates);
             if (parsed.globalDeliveryDate) setGlobalDeliveryDate(parsed.globalDeliveryDate);
 
@@ -102,10 +104,16 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
           }
         } catch (e) {
           console.error("Failed to parse saved cart state", e);
-          if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+          if (data.unidades.length > 0) {
+            setSelectedUnitId(data.unidades[0].id);
+            setSelectedClientId(data.unidades[0].empresaid);
+          }
         }
       } else {
-        if (data.clientes.length > 0) setSelectedClientId(String(data.clientes[0].id));
+        if (data.unidades.length > 0) {
+          setSelectedUnitId(data.unidades[0].id);
+          setSelectedClientId(data.unidades[0].empresaid);
+        }
       }
 
       setLoading(false);
@@ -119,6 +127,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       const stateToSave = {
         selectedItemsMap,
         selectedClientId,
+        selectedUnitId,
         deliveryDates,
         globalDeliveryDate,
         // We can also save clientName for the dashboard to verify
@@ -126,7 +135,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       };
       localStorage.setItem('SECUREFLOW_CART_STATE', JSON.stringify(stateToSave));
     }
-  }, [selectedItemsMap, selectedClientId, deliveryDates, globalDeliveryDate, loading, catalog.clientes]);
+  }, [selectedItemsMap, selectedClientId, selectedUnitId, deliveryDates, globalDeliveryDate, loading, catalog.clientes]);
 
   const handleClearCart = () => {
     if (window.confirm("Tem certeza que deseja limpar o carrinho?")) {
@@ -136,7 +145,10 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       localStorage.removeItem('SECUREFLOW_CART_STATE');
 
       // Optionally reset client
-      if (catalog.clientes.length > 0) setSelectedClientId(String(catalog.clientes[0].id));
+      if (catalog.unidades.length > 0) {
+        setSelectedUnitId(catalog.unidades[0].id);
+        setSelectedClientId(catalog.unidades[0].empresaid);
+      }
     }
   }
 
@@ -344,10 +356,9 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       procedimentoId: item.procedimento.id,
       quantidade: item.quantity,
       preco: item.unitPrice,
-      data_para_entrega: deliveryDates[item.procedimento.id] || globalDeliveryDate || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
     }));
 
-    const success = await createProposal(selectedClientId, itemsPayload);
+    const success = await createProposal(selectedClientId, itemsPayload, selectedUnitId || undefined);
 
     if (success) {
       // Clear persistence on success
@@ -360,37 +371,48 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   };
 
   const handleCreateClient = async () => {
-    if (!newClientData.name.trim()) {
-      alert('O nome do cliente é obrigatório.');
+    if (!newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim()) {
+      alert('Nome Fantasia e Razão Social são obrigatórios.');
       return;
     }
 
     setIsSavingNewClient(true);
-    const result = await createNewClient(
-      newClientData.name,
+    // 1. Create Client
+    const clientResult = await createNewClient(
+      newClientData.nomeFantasia,
+      newClientData.razaoSocial,
       newClientData.email,
       newClientData.phone,
-      undefined // No proposal ID yet
+      undefined
     );
-    setIsSavingNewClient(false);
 
-    if (result.success && result.data) {
-      // Update catalog locally to include the new client immediately
-      setCatalog(prev => ({
-        ...prev,
-        clientes: [...prev.clientes, result.data!]
-      }));
+    if (clientResult.success && clientResult.data) {
+      // 2. Create Default Unit
+      const unitResult = await createUnit(newClientData.nomeFantasia, clientResult.data.id); // Using Nome Fantasia as Unit Name default
 
-      // Select the new client
-      setSelectedClientId(String(result.data.id));
+      setIsSavingNewClient(false);
 
-      // Close modal
-      setIsCreatingClient(false);
-      setNewClientData({ name: '', email: '', phone: '' });
+      if (unitResult.success && unitResult.data) {
+        // Update catalog
+        setCatalog(prev => ({
+          ...prev,
+          clientes: [...prev.clientes, clientResult.data!],
+          unidades: [...prev.unidades, unitResult.data!]
+        }));
+
+        // Select the new unit
+        setSelectedClientId(clientResult.data.id);
+        setSelectedUnitId(unitResult.data.id);
+
+        setIsCreatingClient(false);
+        setNewClientData({ nomeFantasia: '', razaoSocial: '', email: '', phone: '' });
+      } else {
+        alert('Erro ao criar unidade automática: ' + unitResult.error);
+      }
     } else {
-      alert('Erro ao criar cliente: ' + result.error);
+      setIsSavingNewClient(false);
+      alert('Erro ao criar cliente: ' + clientResult.error);
     }
-
   };
 
   const handleCreateProcedure = async () => {
@@ -464,8 +486,8 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
           <div className="w-full md:w-2/3 flex items-center gap-2">
             <ClientSelector
               clients={catalog.clientes}
-              selectedClientId={selectedClientId}
-              onSelect={setSelectedClientId}
+              selectedUnitId={selectedUnitId}
+              onSelect={(cid, uid) => { setSelectedClientId(cid); setSelectedUnitId(uid); }}
               onCreateNew={() => setIsCreatingClient(true)}
               className="flex-1"
             />
@@ -589,132 +611,82 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg"><ShoppingCart size={20} /></div>
                 <div>
                   <h2 className="font-bold text-lg">Resumo da Proposta</h2>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">
-                    {catalog.clientes.find(c => String(c.id) === selectedClientId)?.nome || 'Cliente Selecionado'}
-                  </p>
+                  <div className="text-sm text-zinc-500 dark:text-zinc-400 font-mono space-y-1">
+                    <p><span className="text-zinc-400 font-normal">Unidade:</span> {catalog.unidades.find(u => u.id === selectedUnitId)?.nome_unidade || 'Unidade Selecionada'}</p>
+                    <p><span className="text-zinc-400 font-normal">Cliente:</span> {catalog.clientes.find(c => String(c.id) === selectedClientId)?.nome || 'Cliente'}</p>
+                  </div>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                 </div>
               </div>
               <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><XIcon size={20} /></button>
             </div>
 
-            <div className="border-b dark:border-white/10 flex">
-              <button
-                onClick={() => setCartActiveTab('itens')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors',
-                  cartActiveTab === 'itens'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                )}
-              >
-                <ListTodo size={16} />
-                Itens
-              </button>
-              <button
-                onClick={() => setCartActiveTab('prazos')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors',
-                  cartActiveTab === 'prazos'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                )}
-              >
-                <CalendarClock size={16} />
-                Prazos
-              </button>
-            </div>
-
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {cartActiveTab === 'itens' && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center px-1 mb-2">
-                    <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Itens ({summaryItems.length})</span>
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenGlobalPriceMenu(!openGlobalPriceMenu)}
-                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1"
-                      >
-                        <Tag size={12} /> Aplicar modalidade a todos
-                      </button>
-                      {openGlobalPriceMenu && (
-                        <div className="absolute top-full right-0 mt-1 w-48 bg-white dark:bg-zinc-800 rounded-lg shadow-xl border dark:border-white/10 z-50 animate-fade-in p-1">
-                          {Object.keys(priceTiers).map((key) => {
-                            const tier = key as PriceTierKey;
-                            return (
-                              <button
-                                key={tier}
-                                onClick={() => handleApplyModeToAll(tier)}
-                                className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white block text-zinc-700 dark:text-zinc-200"
-                              >
-                                {priceTiers[tier]}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
-                  {summaryItems.map(item => (
-                    <div key={item.procedimento.id} className={`p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10 relative transition-all ${openSidebarPriceMenu === item.procedimento.id ? 'z-50' : 'z-0'}`}>
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm">{item.procedimento.nome}</p>
-                        <div className="flex items-center gap-2 mt-1 relative">
-                          <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
-                            <Tag size={12} />
-                            <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
-                          </button>
-
-                          {editingPrice?.procId === item.procedimento.id ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editingPrice.price}
-                              onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
-                              onBlur={handleSaveManualPrice}
-                              onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
-                              className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
-                              autoFocus
-                            />
-                          ) : (
-                            <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400" /></span>
-                          )}
-                          {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
-                        </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center px-1 mb-2">
+                  <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Itens ({summaryItems.length})</span>
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenGlobalPriceMenu(!openGlobalPriceMenu)}
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1"
+                    >
+                      <Tag size={12} /> Aplicar modalidade a todos
+                    </button>
+                    {openGlobalPriceMenu && (
+                      <div className="absolute top-full right-0 mt-1 w-48 bg-white dark:bg-zinc-800 rounded-lg shadow-xl border dark:border-white/10 z-50 animate-fade-in p-1">
+                        {Object.keys(priceTiers).map((key) => {
+                          const tier = key as PriceTierKey;
+                          return (
+                            <button
+                              key={tier}
+                              onClick={() => handleApplyModeToAll(tier)}
+                              className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white block text-zinc-700 dark:text-zinc-200"
+                            >
+                              {priceTiers[tier]}
+                            </button>
+                          )
+                        })}
                       </div>
-                      <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
-                        <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
-                        <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
-                        <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
-                      </div>
-                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {cartActiveTab === 'prazos' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2"><CalendarPlus size={16} /> Data Global</label>
-                    <div className="flex gap-2">
-                      <input type="date" value={globalDeliveryDate} onChange={e => setGlobalDeliveryDate(e.target.value)} className="flex-1 w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none" />
-                      <button onClick={handleApplyGlobalDate} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold">Aplicar</button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-sm flex items-center gap-2"><ListTodo size={16} /> Datas Individuais</h3>
-                    {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Adicione itens para definir prazos.</p>}
-                    {summaryItems.map(item => (
-                      <div key={item.procedimento.id} className="flex items-center justify-between p-2 bg-white dark:bg-zinc-800/50 rounded-lg border dark:border-white/10">
-                        <p className="text-sm flex-1 pr-2 truncate">{item.procedimento.nome}</p>
-                        <input type="date" value={deliveryDates[item.procedimento.id] || ''} onChange={e => setDeliveryDates(prev => ({ ...prev, [item.procedimento.id]: e.target.value }))} className="bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-lg p-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none" />
-                      </div>
-                    ))}
+                    )}
                   </div>
                 </div>
-              )}
+                {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
+                {summaryItems.map(item => (
+                  <div key={item.procedimento.id} className={`p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10 relative transition-all ${openSidebarPriceMenu === item.procedimento.id ? 'z-50' : 'z-0'}`}>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{item.procedimento.nome}</p>
+                      <div className="flex items-center gap-2 mt-1 relative">
+                        <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                          <Tag size={12} />
+                          <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
+                        </button>
+
+                        {editingPrice?.procId === item.procedimento.id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editingPrice.price}
+                            onChange={(e) => setEditingPrice({ procId: item.procedimento.id, price: e.target.value })}
+                            onBlur={handleSaveManualPrice}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveManualPrice()}
+                            className="w-24 text-sm bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md py-0.5 px-1 font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                            autoFocus
+                          />
+                        ) : (
+                          <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400" /></span>
+                        )}
+                        {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
+                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
+                      <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                      <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
+                    </div>
+                    <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="p-4 mt-auto border-t border-white/20 dark:border-white/10">
@@ -757,14 +729,24 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome Fantasia *</label>
                 <input
                   type="text"
-                  value={newClientData.name}
-                  onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                  value={newClientData.nomeFantasia}
+                  onChange={e => setNewClientData({ ...newClientData, nomeFantasia: e.target.value })}
                   className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                  placeholder="Nome do Cliente ou Empresa"
+                  placeholder="Nome Fantasia"
                   autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Razão Social *</label>
+                <input
+                  type="text"
+                  value={newClientData.razaoSocial}
+                  onChange={e => setNewClientData({ ...newClientData, razaoSocial: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  placeholder="Razão Social Ltda"
                 />
               </div>
               <div>
@@ -789,7 +771,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
               </div>
               <button
                 onClick={handleCreateClient}
-                disabled={isSavingNewClient || !newClientData.name.trim()}
+                disabled={isSavingNewClient || !newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim()}
                 className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
               >
                 {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}

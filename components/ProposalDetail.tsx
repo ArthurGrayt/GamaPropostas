@@ -24,12 +24,9 @@ const priceTiers: Record<PriceTierKey, string> = {
 
 // --- Status Definitions ---
 const ITEM_STATUSES: Record<ItemStatus, { label: string; icon: React.ElementType; color: string; progress: number; }> = {
-    'NÃO INICIADO': { label: 'Não Iniciado', icon: Circle, color: 'text-zinc-500', progress: 0 },
-    'EM PROCESSO': { label: 'Em Processo', icon: PlayCircle, color: 'text-blue-500', progress: 20 },
-    'EM REVISÃO': { label: 'Em Revisão', icon: Eye, color: 'text-purple-500', progress: 40 },
-    'ENVIADO AO CLIENTE': { label: 'Enviado', icon: Send, color: 'text-cyan-500', progress: 60 },
-    'VALIDADO PELO CLIENTE': { label: 'Validado', icon: UserCheck, color: 'text-amber-500', progress: 80 },
-    'PRONTO PARA COBRANÇA': { label: 'Pronto p/ Cobrança', icon: CheckCircle, color: 'text-emerald-500', progress: 100 },
+    'PENDING': { label: 'Pendente', icon: Clock, color: 'text-zinc-500', progress: 0 },
+    'APPROVED': { label: 'Aprovado', icon: CheckCircle, color: 'text-emerald-500', progress: 100 },
+    'REJECTED': { label: 'Reprovado', icon: XCircle, color: 'text-red-500', progress: 100 },
 };
 const itemStatusKeys = Object.keys(ITEM_STATUSES) as ItemStatus[];
 
@@ -63,8 +60,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     } | null>(null);
     const [isSavingItem, setIsSavingItem] = useState(false);
 
-    const [editingDate, setEditingDate] = useState<{ uiKey: string; date: string } | null>(null);
-    const [isSavingDate, setIsSavingDate] = useState(false);
+
 
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -77,7 +73,6 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [newItemDetails, setNewItemDetails] = useState({
         quantity: 1,
         price: 0,
-        date: '',
         isManualPrice: false
     });
     const [isSavingNewItem, setIsSavingNewItem] = useState(false);
@@ -138,6 +133,20 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const handleItemStatusUpdate = async (itemId: number, uiKey: string, newStatus: ItemStatus) => {
         setOpenStatusMenu(null);
         await updateItemStatus(itemId, newStatus);
+
+        // Reverse Sync: If all items become the SAME status, update the proposal status
+        if (['APPROVED', 'PENDING', 'REJECTED'].includes(newStatus)) {
+            const allItemsSameStatus = items.every(i => {
+                const effectiveStatus = (i.id === itemId) ? newStatus : i.status;
+                return effectiveStatus === newStatus;
+            });
+
+            if (allItemsSameStatus && currentStatus !== newStatus) {
+                await updateProposalStatus(proposal.id, newStatus as ProposalStatus);
+                setCurrentStatus(newStatus as ProposalStatus);
+            }
+        }
+
         onUpdate(); // Full refresh to get data_entregue
     };
 
@@ -149,23 +158,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         });
     };
 
-    const handleSaveDateChange = async () => {
-        if (!editingDate) return;
-        if (!editingDate.date) {
-            alert("Por favor, selecione uma data válida.");
-            return;
-        }
 
-        const itemToUpdate = items.find(i => i.uiKey === editingDate.uiKey);
-        if (!itemToUpdate) return;
-
-        setIsSavingDate(true);
-        await updateItemDetails(itemToUpdate.id, { data_para_entrega: editingDate.date });
-
-        setEditingDate(null);
-        setIsSavingDate(false);
-        onUpdate(); // Refresh all data
-    };
 
     const handleSaveItemChanges = async () => {
         if (!editingItem) return;
@@ -189,10 +182,21 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         onUpdate(); // Refresh all data
     };
 
-    const handleGeneratePdf = async () => {
+    // PDF Generation State
+    const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
+
+    const handleOpenPdfModal = () => {
+        setIsPdfModalOpen(true);
+    };
+
+    const handleConfirmGeneratePdf = async () => {
+        setIsPdfModalOpen(false);
         setIsGeneratingPdf(true);
         try {
-            await generateProposalPdf(proposal);
+            await generateProposalPdf(proposal, {
+                companyNameType: pdfCompanyNameType
+            });
         } catch (error) {
             console.error("PDF Generation Error: ", error);
             alert('Ocorreu um erro ao gerar o PDF.');
@@ -249,8 +253,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
             {
                 procedimentoId: selectedProcedure.id,
                 quantidade: newItemDetails.quantity,
-                preco: newItemDetails.price,
-                data_para_entrega: newItemDetails.date || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0]
+                preco: newItemDetails.price
             }
         );
         setIsSavingNewItem(false);
@@ -258,7 +261,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         if (success) {
             setIsAddingItem(false);
             setSelectedProcedure(null);
-            setNewItemDetails({ quantity: 1, price: 0, date: '', isManualPrice: false });
+            setNewItemDetails({ quantity: 1, price: 0, isManualPrice: false });
             onUpdate();
         } else {
             alert('Erro ao adicionar item.');
@@ -354,6 +357,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         }, 0);
         return totalProgress / totalItemsCount;
     }, [items]);
+    const totalApproved = useMemo(() => {
+        return items
+            .filter(i => i.status === 'APPROVED')
+            .reduce((acc, i) => acc + (i.total || (i.preco || 0) * (i.quantidade || 1)), 0);
+    }, [items]);
+
     const isComplete = progress === 100;
 
     if (!proposal || !proposal.cliente) {
@@ -398,9 +407,16 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                     <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
                                     <Avatar src={proposal.cliente.avatar || ''} alt={proposal.cliente.nome || 'Cliente'} />
                                 </div>
-                                <h2 className="text-xl font-bold text-zinc-800 dark:text-white mb-1">{proposal.cliente.nome || 'Cliente Desconhecido'}</h2>
-                                {proposal.cliente.razao_social && proposal.cliente.razao_social !== proposal.cliente.nome && <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium mb-1">{proposal.cliente.razao_social}</p>}
-                                <p className="text-xs text-zinc-400 font-mono mt-1">{proposal.cliente.id !== 'unknown' ? 'Cliente Verificado' : 'Cliente Não Encontrado'}</p>
+                                <h2 className="text-xl font-bold text-zinc-800 dark:text-white mb-2">
+                                    <span className="text-zinc-500 font-normal text-base mr-1">Cliente :</span>
+                                    {proposal.cliente.nome || 'Cliente Desconhecido'}
+                                </h2>
+                                {proposal.unidade && (
+                                    <h2 className="text-lg font-bold text-zinc-800 dark:text-white mb-1">
+                                        <span className="text-zinc-500 font-normal text-base mr-1">Unidade :</span>
+                                        {proposal.unidade.nome_unidade}
+                                    </h2>
+                                )}
                             </>
                         ) : (
                             <div className="w-full px-4 animate-fade-in">
@@ -432,9 +448,16 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                             </div>
                         )}
                         <div className="w-full h-px bg-neutral-200 dark:bg-zinc-700/50 my-6"></div>
-                        <div className="w-full flex justify-between px-4 mb-2">
-                            <span className="text-zinc-500">Valor Total</span>
-                            <span className="font-bold text-zinc-900 dark:text-white text-lg">{(proposal.totalValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <div className="w-full space-y-3 px-2">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle size={14} /> Total Aprovado</span>
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">{totalApproved.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            </div>
+                            <div className="w-full h-px bg-neutral-100 dark:bg-white/5 border-dashed"></div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-zinc-500 font-medium">Valor Total</span>
+                                <span className="font-bold text-zinc-900 dark:text-white text-lg">{(proposal.totalValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            </div>
                         </div>
                     </GlassCard>
                     <GlassCard>
@@ -454,7 +477,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                         label={isGeneratingPdf ? 'Gerando...' : 'Gerar PDF'}
                                         variant="neutral"
                                         icon={isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                                        onClick={handleGeneratePdf}
+                                        onClick={handleOpenPdfModal}
                                     />
                                     <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
                                     <ActionButton
@@ -489,7 +512,6 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                             setNewItemDetails({
                                                                 quantity: 1,
                                                                 price: proc.preco_avulso || proc.preco || 0,
-                                                                date: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
                                                                 isManualPrice: false
                                                             });
                                                         }}
@@ -548,15 +570,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                 />
                                             </div>
 
-                                            <div>
-                                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Entrega</label>
-                                                <input
-                                                    type="date"
-                                                    value={newItemDetails.date}
-                                                    onChange={e => setNewItemDetails(prev => ({ ...prev, date: e.target.value }))}
-                                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded p-2 text-sm"
-                                                />
-                                            </div>
+
                                         </div>
 
                                         <button
@@ -630,11 +644,11 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                 </h3>
                                                 <div className="space-y-3">
                                                     {catData.itens.map(item => {
-                                                        const statusInfo = ITEM_STATUSES[item.status] || ITEM_STATUSES['NÃO INICIADO'];
+                                                        const statusInfo = ITEM_STATUSES[item.status] || ITEM_STATUSES['PENDING'];
                                                         const StatusIcon = statusInfo.icon;
                                                         const isEditing = editingItem?.uiKey === item.uiKey;
-                                                        const isDelivered = item.status === 'VALIDADO PELO CLIENTE' || item.status === 'PRONTO PARA COBRANÇA';
-                                                        const isOverdue = !isDelivered && item.data_para_entrega && new Date(item.data_para_entrega) < new Date();
+                                                        const isDelivered = item.status === 'APPROVED';
+
 
                                                         return (
                                                             <GlassCard
@@ -683,46 +697,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                                                 {item.modalidade && <span className="py-0.5 px-1.5 rounded bg-blue-100/70 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 font-sans font-semibold">{item.modalidade}</span>}
                                                                             </div>
 
-                                                                            <div className="group/date relative">
-                                                                                {editingDate?.uiKey === item.uiKey ? (
-                                                                                    <div className="flex items-center gap-2 text-xs">
-                                                                                        <input
-                                                                                            type="date"
-                                                                                            value={editingDate.date}
-                                                                                            onChange={(e) => setEditingDate({ ...editingDate, date: e.target.value })}
-                                                                                            className="w-full bg-white/50 dark:bg-black/50 border dark:border-white/10 rounded-md p-1 focus:ring-1 focus:ring-blue-500 outline-none"
-                                                                                        />
-                                                                                        <button onClick={handleSaveDateChange} disabled={isSavingDate} className="p-1.5 text-green-500 hover:bg-green-100 dark:hover:bg-green-900 rounded-full disabled:opacity-50">
-                                                                                            {isSavingDate ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                                                                        </button>
-                                                                                        <button onClick={() => setEditingDate(null)} disabled={isSavingDate} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900 rounded-full disabled:opacity-50">
-                                                                                            <X size={14} />
-                                                                                        </button>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        {isDelivered && item.data_entregue ? (
-                                                                                            <div className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                                                                                                <CalendarCheck size={14} />
-                                                                                                <span>Entregue em: {new Date(item.data_entregue).toLocaleDateString('pt-BR')}</span>
-                                                                                            </div>
-                                                                                        ) : item.data_para_entrega && (
-                                                                                            <div className={`text-xs font-medium flex items-center gap-1.5 ${isOverdue ? 'text-red-500' : 'text-zinc-500'}`}>
-                                                                                                {isOverdue ? <AlertCircle size={14} /> : <CalendarClock size={14} />}
-                                                                                                <span>Prazo: {new Date(item.data_para_entrega).toLocaleDateString('pt-BR')}</span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {!isDelivered && (
-                                                                                            <button
-                                                                                                onClick={() => setEditingDate({ uiKey: item.uiKey, date: item.data_para_entrega?.split('T')[0] || '' })}
-                                                                                                className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 opacity-0 group-hover/date:opacity-100 transition-opacity"
-                                                                                            >
-                                                                                                <Edit2 size={12} />
-                                                                                            </button>
-                                                                                        )}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
+
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -828,6 +803,125 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                             >
                                 {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                                 + Criar Cliente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* PDF Options Modal */}
+            {isPdfModalOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
+                        <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Opções do PDF</h3>
+                            <button onClick={() => setIsPdfModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div>
+                                <label className="block text-sm font-semibold text-zinc-500 dark:text-zinc-400 mb-3 uppercase tracking-wider">Nome da Empresa no Relatório</label>
+                                <div className="space-y-3">
+                                    <label
+                                        onClick={() => setPdfCompanyNameType('NOME')}
+                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                {pdfCompanyNameType === 'NOME' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                            </div>
+                                            <span className="font-medium text-zinc-700 dark:text-zinc-200">Nome do Cliente</span>
+                                        </div>
+                                        <span className="text-xs text-zinc-400">{proposal.cliente.nome}</span>
+                                    </label>
+
+                                    <label
+                                        onClick={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
+                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                {pdfCompanyNameType === 'RAZAO_SOCIAL' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Razão Social</span>
+                                                <span className="text-[10px] text-zinc-400">
+                                                    {proposal.unidade ? '(Unidade)' : '(Cliente)'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span className="text-xs text-zinc-400 truncate max-w-[150px]">
+                                            {proposal.unidade?.razao_social || proposal.cliente.razao_social || 'Não informado'}
+                                        </span>
+                                    </label>
+
+                                    <label
+                                        onClick={() => setPdfCompanyNameType('NOME_FANTASIA')}
+                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                {pdfCompanyNameType === 'NOME_FANTASIA' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Nome Fantasia</span>
+                                                <span className="text-[10px] text-zinc-400">
+                                                    {proposal.unidade ? '(Unidade)' : '(Cliente)'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span className="text-xs text-zinc-400 truncate max-w-[150px]">
+                                            {proposal.unidade?.nome_fantasia || proposal.cliente.nome_fantasia || 'Não informado'}
+                                        </span>
+                                    </label>
+
+                                    <input
+                                        type="radio"
+                                        name="companyNameType"
+                                        value="NOME"
+                                        checked={pdfCompanyNameType === 'NOME'}
+                                        onChange={() => setPdfCompanyNameType('NOME')}
+                                        className="hidden"
+                                    />
+                                    <input
+                                        type="radio"
+                                        name="companyNameType"
+                                        value="RAZAO_SOCIAL"
+                                        checked={pdfCompanyNameType === 'RAZAO_SOCIAL'}
+                                        onChange={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
+                                        className="hidden"
+                                    />
+                                    <input
+                                        type="radio"
+                                        name="companyNameType"
+                                        value="NOME_FANTASIA"
+                                        checked={pdfCompanyNameType === 'NOME_FANTASIA'}
+                                        onChange={() => setPdfCompanyNameType('NOME_FANTASIA')}
+                                        className="hidden"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/30 flex gap-3">
+                                <FileText className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
+                                <p className="text-sm text-amber-800 dark:text-amber-200">
+                                    Apenas itens marcados como <span className="font-bold">Aprovado</span> serão incluídos no PDF.
+                                </p>
+                            </div>
+
+                        </div>
+                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsPdfModalOpen(false)}
+                                className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmGeneratePdf}
+                                className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                            >
+                                Gerar PDF
                             </button>
                         </div>
                     </div>

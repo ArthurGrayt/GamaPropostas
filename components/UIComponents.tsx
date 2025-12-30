@@ -176,29 +176,41 @@ export const Avatar: React.FC<{ src: string; alt: string }> = ({ src, alt }) => 
     <img src={src} alt={alt} className="w-full h-full object-cover" />
   </div>
 );
-import { Client } from '../types';
-import { Plus, Check, ChevronDown, User } from 'lucide-react';
+import { Client, Unit } from '../types';
+import { Plus, Check, ChevronDown, User, Building2 } from 'lucide-react';
 
 export const ClientSelector: React.FC<{
   clients: Client[];
-  selectedClientId: string;
-  onSelect: (clientId: string) => void;
+  selectedUnitId?: number | null;
+  onSelect: (clientId: string, unitId: number) => void;
   onCreateNew: () => void;
   className?: string;
-}> = ({ clients, selectedClientId, onSelect, onCreateNew, className }) => {
+}> = ({ clients, selectedUnitId, onSelect, onCreateNew, className }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const selectedClient = clients.find(c => c.id === selectedClientId);
-
-  const filteredClients = React.useMemo(() => {
-    return clients.filter(c =>
-      (c.nome || '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.nome_fantasia || '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.razao_social || '').toLowerCase().includes(search.toLowerCase())
+  // Flatten units for display
+  const allUnits = React.useMemo(() => {
+    return clients.flatMap(client =>
+      (client.units || []).map(unit => ({
+        ...unit,
+        clientName: client.nome_fantasia || client.nome,
+        clientAvatar: client.avatar,
+        clientId: client.id
+      }))
     );
-  }, [clients, search]);
+  }, [clients]);
+
+  const selectedUnit = allUnits.find(u => u.id === selectedUnitId);
+
+  const filteredUnits = React.useMemo(() => {
+    const term = search.toLowerCase();
+    return allUnits.filter(u =>
+      (u.nome_unidade || '').toLowerCase().includes(term) ||
+      (u.clientName || '').toLowerCase().includes(term)
+    );
+  }, [allUnits, search]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -218,15 +230,18 @@ export const ClientSelector: React.FC<{
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-            {selectedClient?.avatar ? (
-              <img src={selectedClient.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+            {selectedUnit?.clientAvatar ? (
+              <img src={selectedUnit.clientAvatar} alt="" className="w-full h-full rounded-full object-cover" />
             ) : (
-              <User size={16} />
+              <Building2 size={16} />
             )}
           </div>
-          <span className={cn("truncate font-medium", !selectedClient && "text-zinc-400")}>
-            {selectedClient ? (selectedClient.nome_fantasia || selectedClient.nome) : "Selecione um cliente..."}
-          </span>
+          <div className="flex flex-col overflow-hidden text-left">
+            <span className={cn("truncate font-medium text-sm", !selectedUnit && "text-zinc-400")}>
+              {selectedUnit ? <><span className="text-zinc-400 font-normal">Unidade:</span> {selectedUnit.nome_unidade}</> : "Selecione uma unidade..."}
+            </span>
+            {selectedUnit && <span className="text-[10px] text-zinc-500 truncate"><span className="text-zinc-400">Cliente:</span> {selectedUnit.clientName}</span>}
+          </div>
         </div>
         <ChevronDown size={16} className={cn("text-zinc-400 transition-transform duration-300", isOpen && "rotate-180")} />
       </div>
@@ -240,7 +255,7 @@ export const ClientSelector: React.FC<{
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar cliente..."
+                placeholder="Buscar unidade..."
                 className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                 autoFocus
               />
@@ -248,26 +263,29 @@ export const ClientSelector: React.FC<{
           </div>
 
           <div className="max-h-[240px] overflow-y-auto custom-scrollbar p-1">
-            {filteredClients.length === 0 && (
-              <div className="py-4 text-center text-zinc-400 text-sm">Nenhum cliente encontrado.</div>
+            {filteredUnits.length === 0 && (
+              <div className="py-4 text-center text-zinc-400 text-sm">Nenhuma unidade encontrada.</div>
             )}
-            {filteredClients.map(client => (
+            {filteredUnits.map(unit => (
               <button
-                key={client.id}
+                key={unit.id}
                 onClick={() => {
-                  onSelect(client.id);
+                  onSelect(unit.clientId, unit.id);
                   setIsOpen(false);
                   setSearch('');
                 }}
                 className={cn(
                   "w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between group transition-colors",
-                  selectedClientId === client.id
+                  selectedUnitId === unit.id
                     ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                     : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                 )}
               >
-                <span className="font-medium truncate">{client.nome_fantasia || client.nome}</span>
-                {selectedClientId === client.id && <Check size={16} />}
+                <div className="overflow-hidden">
+                  <p className="font-medium truncate text-sm"><span className="text-zinc-400 font-normal">Unidade:</span> {unit.nome_unidade}</p>
+                  <p className="text-xs text-zinc-500 truncate"><span className="text-zinc-400">Cliente:</span> {unit.clientName}</p>
+                </div>
+                {selectedUnitId === unit.id && <Check size={16} />}
               </button>
             ))}
           </div>
@@ -281,7 +299,7 @@ export const ClientSelector: React.FC<{
               className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-500/20"
             >
               <Plus size={16} />
-              Novo Cliente
+              Minha unidade não está aqui
             </button>
           </div>
         </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Client, EnrichedProposal, ProposalStatus } from '../types';
+import { Client, Unit, EnrichedProposal, ProposalStatus } from '../types';
 import { fetchCatalogData, getProposals, getProposalById } from '../services/mockData';
 import { GlassCard, SearchBar, StatusBadge, FilterPill } from './UIComponents';
-import { ArrowLeft, Search, FileText, ChevronDown, ChevronUp, X, Loader2, Calendar, DollarSign, Package, User } from 'lucide-react';
+import { ArrowLeft, Search, FileText, ChevronDown, ChevronUp, X, Loader2, Calendar, DollarSign, Package, User, Building2 } from 'lucide-react';
 
 interface Props {
     onBack: () => void;
@@ -12,13 +12,14 @@ type FilterStatus = 'ALL' | ProposalStatus;
 type FilterFrequent = 'ALL' | 'FREQUENT' | 'NOT_FREQUENT';
 
 export const ClientManagement: React.FC<Props> = ({ onBack }) => {
+    const [units, setUnits] = useState<Unit[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [proposals, setProposals] = useState<EnrichedProposal[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL');
-    const [frequentFilter, setFrequentFilter] = useState<FilterFrequent>('ALL');
-    const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
+    const [frequentFilter, setFrequentFilter] = useState<FilterFrequent>('ALL'); // TODO: Determine how frequency applies to Units
+    const [expandedUnitId, setExpandedUnitId] = useState<number | null>(null);
     const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
     const [fullProposalDetails, setFullProposalDetails] = useState<EnrichedProposal | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
@@ -30,6 +31,7 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                 fetchCatalogData(),
                 getProposals()
             ]);
+            setUnits(catalogData.unidades);
             setClients(catalogData.clientes);
             setProposals(proposalsData);
             setLoading(false);
@@ -37,38 +39,28 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
         loadData();
     }, []);
 
-    const filteredClients = useMemo(() => {
-        let result = clients;
+    const filteredUnits = useMemo(() => {
+        let result = units.map(u => {
+            const client = clients.find(c => String(c.id) === String(u.empresaid));
+            return { ...u, clientName: client?.nome_fantasia || client?.nome || 'Desconhecido', textSearch: `${u.nome_unidade} ${client?.nome_fantasia || ''} ${client?.nome || ''}`.toLowerCase() };
+        });
 
         // 1. Text Search
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            result = result.filter(c =>
-                (c.nome || '').toLowerCase().includes(query) ||
-                (c.nome_fantasia || '').toLowerCase().includes(query) ||
-                (c.razao_social || '').toLowerCase().includes(query)
-            );
+            result = result.filter(u => u.textSearch.includes(query));
         }
 
         // 2. Status Filter
         if (statusFilter !== 'ALL') {
-            result = result.filter(client => {
-                const clientProposals = proposals.filter(p => String(p.cliente.id) === String(client.id));
-                return clientProposals.some(p => p.status === statusFilter);
-            });
-        }
-
-        // 3. Frequent Client Filter
-        if (frequentFilter !== 'ALL') {
-            result = result.filter(client => {
-                if (frequentFilter === 'FREQUENT') return client.clientefrequente === true;
-                if (frequentFilter === 'NOT_FREQUENT') return !client.clientefrequente;
-                return true;
+            result = result.filter(unit => {
+                const unitProposals = proposals.filter(p => p.unidade_id === unit.id);
+                return unitProposals.some(p => p.status === statusFilter);
             });
         }
 
         return result;
-    }, [clients, searchQuery, statusFilter, frequentFilter, proposals]);
+    }, [units, clients, searchQuery, statusFilter, proposals]);
 
     const handleProposalClick = async (proposalId: number) => {
         setSelectedProposalId(proposalId);
@@ -105,12 +97,17 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                     <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
                         <ArrowLeft />
                     </button>
-                    <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Gerenciar Clientes</h1>
+                    <h1 className="text-2xl font-bold text-zinc-900 dark:text-white flex items-center gap-3">
+                        Gerenciar Unidades
+                        <span className="text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 px-3 py-1 rounded-full border border-zinc-200 dark:border-zinc-700">
+                            {units.length}
+                        </span>
+                    </h1>
                 </div>
                 <SearchBar
                     value={searchQuery}
                     onChange={setSearchQuery}
-                    placeholder="Buscar cliente por nome, razão social..."
+                    placeholder="Buscar unidade ou cliente..."
                 />
                 <div className="space-y-2">
                     <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -136,24 +133,6 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                             onClick={() => setStatusFilter('REJECTED')}
                         />
                     </div>
-                    <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center px-2">Frequência:</span>
-                        <FilterPill
-                            label="Todos"
-                            isActive={frequentFilter === 'ALL'}
-                            onClick={() => setFrequentFilter('ALL')}
-                        />
-                        <FilterPill
-                            label="Clientes Frequentes"
-                            isActive={frequentFilter === 'FREQUENT'}
-                            onClick={() => setFrequentFilter('FREQUENT')}
-                        />
-                        <FilterPill
-                            label="Eventuais"
-                            isActive={frequentFilter === 'NOT_FREQUENT'}
-                            onClick={() => setFrequentFilter('NOT_FREQUENT')}
-                        />
-                    </div>
                 </div>
             </div>
 
@@ -161,33 +140,31 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
                         <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                        <p>Carregando clientes...</p>
+                        <p>Carregando unidades...</p>
                     </div>
-                ) : filteredClients.length === 0 ? (
+                ) : filteredUnits.length === 0 ? (
                     <div className="text-center py-20 text-zinc-400">
-                        <p>Nenhum cliente encontrado com os filtros atuais.</p>
+                        <p>Nenhuma unidade encontrada.</p>
                     </div>
                 ) : (
-                    filteredClients.map(client => {
-                        const clientProposals = proposals.filter(p => String(p.cliente.id) === String(client.id));
-                        const isExpanded = expandedClientId === client.id;
+                    filteredUnits.map(unit => {
+                        const unitProposals = proposals.filter(p => p.unidade_id === unit.id);
+                        const isExpanded = expandedUnitId === unit.id;
 
                         return (
-                            <GlassCard key={client.id} className="overflow-hidden transition-all duration-300">
+                            <GlassCard key={unit.id} className="overflow-hidden transition-all duration-300">
                                 <div
-                                    onClick={() => setExpandedClientId(isExpanded ? null : client.id)}
+                                    onClick={() => setExpandedUnitId(isExpanded ? null : unit.id)}
                                     className="p-4 flex items-center justify-between cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
-                                            <User size={20} />
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-500 dark:text-blue-400 shrink-0">
+                                            <Building2 size={20} />
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">{client.nome_fantasia || client.nome}</h3>
-                                            {client.razao_social && client.razao_social !== client.nome_fantasia && (
-                                                <p className="text-sm text-zinc-500 dark:text-zinc-400">{client.razao_social}</p>
-                                            )}
-                                            <p className="text-xs text-zinc-400 mt-1">{clientProposals.length} propostas geradas</p>
+                                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">{unit.nome_unidade}</h3>
+                                            <p className="text-sm text-zinc-500 dark:text-zinc-400">{unit.clientName}</p>
+                                            <p className="text-xs text-zinc-400 mt-1">{unitProposals.length} propostas geradas</p>
                                         </div>
                                     </div>
                                     <div className={`p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
@@ -198,11 +175,11 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                                 {isExpanded && (
                                     <div className="border-t border-neutral-200 dark:border-white/10 bg-zinc-50/50 dark:bg-black/20 p-4 animate-slide-in">
                                         <h4 className="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-3">Histórico de Propostas</h4>
-                                        {clientProposals.length === 0 ? (
-                                            <p className="text-sm text-zinc-500 italic">Nenhuma proposta encontrada para este cliente.</p>
+                                        {unitProposals.length === 0 ? (
+                                            <p className="text-sm text-zinc-500 italic">Nenhuma proposta encontrada para esta unidade.</p>
                                         ) : (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                {clientProposals.map(proposal => (
+                                                {unitProposals.map(proposal => (
                                                     <button
                                                         key={proposal.id}
                                                         onClick={() => handleProposalClick(proposal.id)}
@@ -234,7 +211,7 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                 )}
             </div>
 
-            {/* Proposal Summary Modal */}
+            {/* Proposal Summary Modal (Unchanged) */}
             {selectedProposalId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in flex flex-col max-h-[80vh]">
