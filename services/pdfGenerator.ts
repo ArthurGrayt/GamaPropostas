@@ -47,9 +47,23 @@ class DynamicContentBuilder {
     const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
     const moduleConfigs: ModuleConfig[] = modules.map((m, index) => {
+
       const items = this.proposal.itens.filter(item => {
-        if (!item.modulo?.nome) return false;
-        const modName = normalize(item.modulo.nome);
+        const modName = item.modulo?.nome ? normalize(item.modulo.nome) : '';
+        const procName = item.procedimento?.nome ? normalize(item.procedimento.nome) : '';
+        const isEsocialItem = modName.includes('esocial') || procName.includes('esocial');
+
+        // Logic for eSOCIAL module: Include if it is explicitly an eSocial item
+        if (m.title === 'eSOCIAL') {
+          return isEsocialItem;
+        }
+
+        // Logic for DOCUMENTOS module: Exclude if it is an eSocial item, otherwise standard check
+        if (m.title === 'DOCUMENTOS') {
+          if (isEsocialItem) return false;
+        }
+
+        // Standard check for other modules (or Documentos without eSocial items)
         const targetName = normalize(m.title);
         if (modName.includes(targetName) || targetName.includes(modName)) return true;
         return m.searchKeywords.some(k => modName.includes(k));
