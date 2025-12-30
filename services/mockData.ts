@@ -88,7 +88,13 @@ function enrichProposal(
     if (!modulo) return null;
 
     // Infer status from 'data_entregue' as 'status' column doesn't exist
-    const status: ItemStatus = itemDef.data_entregue ? 'PRONTO PARA COBRANÇA' : 'NÃO INICIADO';
+    // Update: 'status' column might exist now or we want to support it if it does.
+    // Prioritize explicit status if available, otherwise fall back to inference.
+    let status: ItemStatus = (itemDef as any).status;
+
+    if (!status) {
+      status = itemDef.data_entregue ? 'PRONTO PARA COBRANÇA' : 'NÃO INICIADO';
+    }
 
     const unitPrice = itemDef.preco;
     let inferredModalidade = 'Manual';
@@ -419,18 +425,17 @@ export const deleteProposal = async (proposalId: number): Promise<{ success: boo
 
 
 export const updateItemStatus = async (itemId: number, status: ItemStatus): Promise<void> => {
-  const updatePayload: { data_entregue?: string | null } = {};
+  // We now always send the 'status' field.
+  // We ONLY keep data_entregue logic for backward compatibility or extra metadata.
+  const updatePayload: { status?: string, data_entregue?: string | null } = {
+    status: status
+  };
 
-  // Persist status by updating the 'data_entregue' timestamp, since 'status' column doesn't exist.
   if (status === 'VALIDADO PELO CLIENTE' || status === 'PRONTO PARA COBRANÇA') {
     updatePayload.data_entregue = new Date().toISOString();
   } else if (status === 'NÃO INICIADO') {
     // Allow "un-delivering" an item
     updatePayload.data_entregue = null;
-  } else {
-    // For intermediate statuses ('EM PROCESSO', etc.), there is no DB column to update.
-    // The change is client-side only and will be lost on refresh.
-    return;
   }
 
   const { error } = await supabase
