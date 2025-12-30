@@ -39,6 +39,7 @@ class DynamicContentBuilder {
     const modules: { title: string; searchKeywords: string[] }[] = [
       { title: 'EXAMES', searchKeywords: ['exame', 'clinico', 'complementar'] },
       { title: 'DOCUMENTOS', searchKeywords: ['documento', 'pgr', 'pcmb'] },
+      { title: 'eSOCIAL', searchKeywords: ['esocial'] },
       { title: 'TREINAMENTOS', searchKeywords: ['treinamento', 'curso'] },
       { title: 'SERVIÇOS SST', searchKeywords: ['sst', 'consultoria', 'pericia', 'visita'] }
     ];
