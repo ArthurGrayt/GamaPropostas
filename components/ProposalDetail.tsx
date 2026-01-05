@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector } from './UIComponents';
-import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar } from 'lucide-react';
+import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings } from 'lucide-react';
 import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
@@ -84,6 +84,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
     const [isSavingNewClient, setIsSavingNewClient] = useState(false);
+
+    // Observation Modal State
+    const [isObservationModalOpen, setIsObservationModalOpen] = useState(false);
+    const [observationItem, setObservationItem] = useState<EnrichedItem | null>(null);
+    const [observationText, setObservationText] = useState('');
+    const [isSavingObservation, setIsSavingObservation] = useState(false);
 
 
     useEffect(() => {
@@ -204,19 +210,28 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     };
 
     // PDF Generation State
-    const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES'>('NOMENCLATURA');
     const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
+    const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
+    const [pdfShowItemObservations, setPdfShowItemObservations] = useState(false);
 
-    const handleOpenPdfModal = () => {
-        setIsPdfModalOpen(true);
+    // Identify unique modules for the Observation tab
+    // We match the module titles used in pdfGenerator manually or infer them?
+    // pdfGenerator uses: EXAMES, DOCUMENTOS, eSOCIAL, TREINAMENTOS, SERVIÇOS SST
+    const availableModules = ['EXAMES', 'DOCUMENTOS', 'eSOCIAL', 'TREINAMENTOS', 'SERVIÇOS SST'];
+
+    const handleOpenConfigModal = () => {
+        setIsConfigModalOpen(true);
     };
 
     const handleConfirmGeneratePdf = async () => {
-        setIsPdfModalOpen(false);
         setIsGeneratingPdf(true);
         try {
             await generateProposalPdf(proposal, {
-                companyNameType: pdfCompanyNameType
+                companyNameType: pdfCompanyNameType,
+                moduleObservations: pdfModuleObservations,
+                showItemObservations: pdfShowItemObservations
             });
         } catch (error) {
             console.error("PDF Generation Error: ", error);
@@ -234,7 +249,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         }
     };
 
-    const handleConfirmDocSeg = async () => {
+    const handleConfirmDocSeg = async (redirect: boolean) => {
         if (!docSegItem) return;
         if (!docSegPrazo) {
             alert("Por favor, informe o prazo.");
@@ -301,6 +316,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
             }
         }
     };
+    // ... (rest of the file remains same, targeting line for replacement)
+
 
     const handleDeleteProposal = async () => {
         if (window.confirm('ATENÇÃO: Esta ação é irreversível e apagará a proposta permanentemente. Deseja continuar?')) {
@@ -398,6 +415,26 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
     const toggleModule = (modId: number) => {
         setExpandedModules(prev => ({ ...prev, [modId]: !prev[modId] }));
+    };
+
+    const handleOpenObservationModal = (item: EnrichedItem) => {
+        setObservationItem(item);
+        setObservationText(item.observacao || '');
+        setIsObservationModalOpen(true);
+    };
+
+    const handleSaveObservation = async () => {
+        if (!observationItem) return;
+
+        setIsSavingObservation(true);
+        await updateItemDetails(observationItem.id, {
+            observacao: observationText
+        });
+
+        setIsObservationModalOpen(false);
+        setObservationItem(null);
+        setIsSavingObservation(false);
+        onUpdate();
     };
 
     const filteredItems = useMemo(() => {
@@ -555,7 +592,13 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                         label={isGeneratingPdf ? 'Gerando...' : 'Gerar PDF'}
                                         variant="neutral"
                                         icon={isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                                        onClick={handleOpenPdfModal}
+                                        onClick={handleConfirmGeneratePdf}
+                                    />
+                                    <ActionButton
+                                        label="Configurar PDF"
+                                        variant="neutral"
+                                        icon={<Settings size={18} />}
+                                        onClick={handleOpenConfigModal}
                                     />
                                     <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
                                     <ActionButton
@@ -774,6 +817,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                                                 <span className="font-sans font-bold text-zinc-600 dark:text-zinc-300">{(item.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                                                                 {item.modalidade && <span className="py-0.5 px-1.5 rounded bg-blue-100/70 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 font-sans font-semibold">{item.modalidade}</span>}
                                                                             </div>
+                                                                            {item.observacao && (
+                                                                                <div className="mt-1 flex items-start gap-1 p-1.5 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-100 dark:border-yellow-900/40">
+                                                                                    <FileText size={12} className="text-yellow-600 dark:text-yellow-500 mt-0.5 shrink-0" />
+                                                                                    <p className="text-xs text-yellow-800 dark:text-yellow-200 leading-tight">{item.observacao}</p>
+                                                                                </div>
+                                                                            )}
 
 
                                                                         </div>
@@ -794,6 +843,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                                         <>
                                                                             <button onClick={() => handleStartEditingItem(item)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500">
                                                                                 <Edit2 size={14} />
+                                                                            </button>
+                                                                            <button onClick={() => handleOpenObservationModal(item)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500" title="Adicionar Observação">
+                                                                                <Info size={14} />
                                                                             </button>
                                                                             <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-500 transition-colors">
                                                                                 <Trash2 size={14} />
@@ -950,120 +1002,187 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                     </div>
                 </div>
             )}
-            {/* PDF Options Modal */}
-            {isPdfModalOpen && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+            {/* Observation Modal */}
+            {isObservationModalOpen && observationItem && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
                         <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Opções do PDF</h3>
-                            <button onClick={() => setIsPdfModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Observação do Item</h3>
+                            <button onClick={() => setIsObservationModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-6 space-y-6">
-                            <div>
-                                <label className="block text-sm font-semibold text-zinc-500 dark:text-zinc-400 mb-3 uppercase tracking-wider">Nome da Empresa no Relatório</label>
-                                <div className="space-y-3">
-                                    <label
-                                        onClick={() => setPdfCompanyNameType('NOME')}
-                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME' ? 'border-blue-600' : 'border-zinc-300'}`}>
-                                                {pdfCompanyNameType === 'NOME' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                            </div>
-                                            <span className="font-medium text-zinc-700 dark:text-zinc-200">Nome do Cliente</span>
-                                        </div>
-                                        <span className="text-xs text-zinc-400">{proposal.cliente.nome}</span>
-                                    </label>
-
-                                    <label
-                                        onClick={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
-                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'border-blue-600' : 'border-zinc-300'}`}>
-                                                {pdfCompanyNameType === 'RAZAO_SOCIAL' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Razão Social</span>
-                                                <span className="text-[10px] text-zinc-400">
-                                                    {proposal.unidade ? '(Unidade)' : '(Cliente)'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <span className="text-xs text-zinc-400 truncate max-w-[150px]">
-                                            {proposal.unidade?.razao_social || proposal.cliente.razao_social || 'Não informado'}
-                                        </span>
-                                    </label>
-
-                                    <label
-                                        onClick={() => setPdfCompanyNameType('NOME_FANTASIA')}
-                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'border-blue-600' : 'border-zinc-300'}`}>
-                                                {pdfCompanyNameType === 'NOME_FANTASIA' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Nome Fantasia</span>
-                                                <span className="text-[10px] text-zinc-400">
-                                                    {proposal.unidade ? '(Unidade)' : '(Cliente)'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <span className="text-xs text-zinc-400 truncate max-w-[150px]">
-                                            {proposal.unidade?.nome_fantasia || proposal.cliente.nome_fantasia || 'Não informado'}
-                                        </span>
-                                    </label>
-
-                                    <input
-                                        type="radio"
-                                        name="companyNameType"
-                                        value="NOME"
-                                        checked={pdfCompanyNameType === 'NOME'}
-                                        onChange={() => setPdfCompanyNameType('NOME')}
-                                        className="hidden"
-                                    />
-                                    <input
-                                        type="radio"
-                                        name="companyNameType"
-                                        value="RAZAO_SOCIAL"
-                                        checked={pdfCompanyNameType === 'RAZAO_SOCIAL'}
-                                        onChange={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
-                                        className="hidden"
-                                    />
-                                    <input
-                                        type="radio"
-                                        name="companyNameType"
-                                        value="NOME_FANTASIA"
-                                        checked={pdfCompanyNameType === 'NOME_FANTASIA'}
-                                        onChange={() => setPdfCompanyNameType('NOME_FANTASIA')}
-                                        className="hidden"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/30 flex gap-3">
-                                <FileText className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
-                                <p className="text-sm text-amber-800 dark:text-amber-200">
-                                    Apenas itens marcados como <span className="font-bold">Aprovado</span> serão incluídos no PDF.
-                                </p>
-                            </div>
-
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                Adicionar observação para <span className="font-bold text-zinc-800 dark:text-white">{observationItem.procedimento.nome}</span>.
+                            </p>
+                            <textarea
+                                value={observationText}
+                                onChange={(e) => setObservationText(e.target.value)}
+                                placeholder="Escreva sua observação aqui..."
+                                className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
+                                autoFocus
+                            />
                         </div>
                         <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3">
                             <button
-                                onClick={() => setIsPdfModalOpen(false)}
-                                className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium"
+                                onClick={() => setIsObservationModalOpen(false)}
+                                className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
                             >
                                 Cancelar
                             </button>
                             <button
-                                onClick={handleConfirmGeneratePdf}
-                                className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                                onClick={handleSaveObservation}
+                                disabled={isSavingObservation}
+                                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
                             >
-                                Gerar PDF
+                                {isSavingObservation ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                Salvar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* PDF Config Modal */}
+            {isConfigModalOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Configuração do Relatório PDF</h3>
+                            <button onClick={() => setIsConfigModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Tabs Header */}
+                        <div className="flex border-b border-neutral-100 dark:border-white/5 shrink-0">
+                            <button
+                                onClick={() => setConfigTab('NOMENCLATURA')}
+                                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'NOMENCLATURA' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
+                            >
+                                Nomenclatura da Empresa
+                                {configTab === 'NOMENCLATURA' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
+                            </button>
+                            <button
+                                onClick={() => setConfigTab('OBSERVACOES')}
+                                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'OBSERVACOES' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
+                            >
+                                Observações por Módulo
+                                {configTab === 'OBSERVACOES' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                            {configTab === 'NOMENCLATURA' && (
+                                <div className="space-y-6 animate-slide-in">
+                                    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={pdfShowItemObservations}
+                                                onChange={(e) => setPdfShowItemObservations(e.target.checked)}
+                                                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="font-medium text-zinc-700 dark:text-zinc-200">Exibir observações individuais dos itens</span>
+                                        </label>
+                                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 ml-8">
+                                            Se marcado, as observações adicionadas a cada item (clicando no ícone 'i') serão exibidas no PDF logo abaixo do nome do item.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-2">Nomenclatura da Empresa</h4>
+                                        <label
+                                            onClick={() => setPdfCompanyNameType('NOME')}
+                                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                    {pdfCompanyNameType === 'NOME' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                                </div>
+                                                <span className="font-medium text-zinc-700 dark:text-zinc-200">Nome do Cliente</span>
+                                            </div>
+                                            <span className="text-xs text-zinc-400">{proposal.cliente.nome}</span>
+                                        </label>
+
+                                        <label
+                                            onClick={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
+                                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                    {pdfCompanyNameType === 'RAZAO_SOCIAL' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Razão Social</span>
+                                                    <span className="text-[10px] text-zinc-400">
+                                                        {proposal.unidade ? '(Unidade)' : '(Cliente)'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs text-zinc-400 truncate max-w-[150px]">
+                                                {proposal.unidade?.razao_social || proposal.cliente.razao_social || 'Não informado'}
+                                            </span>
+                                        </label>
+
+                                        <label
+                                            onClick={() => setPdfCompanyNameType('NOME_FANTASIA')}
+                                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                    {pdfCompanyNameType === 'NOME_FANTASIA' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Nome Fantasia</span>
+                                                    <span className="text-[10px] text-zinc-400">
+                                                        {proposal.unidade ? '(Unidade)' : '(Cliente)'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs text-zinc-400 truncate max-w-[150px]">
+                                                {proposal.unidade?.nome_fantasia || proposal.cliente.nome_fantasia || 'Não informado'}
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/30 flex gap-3">
+                                        <FileText className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
+                                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                                            Itens marcados como <span className="font-bold">Pendente</span> e <span className="font-bold">Aprovado</span> serão incluídos no PDF.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {configTab === 'OBSERVACOES' && (
+                                <div className="space-y-6 animate-slide-in">
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                                        Adicione observações específicas para cada módulo que serão exibidas logo abaixo da tabela de itens correspondente no PDF gerado.
+                                    </p>
+                                    <div className="space-y-4">
+                                        {availableModules.map(moduleTitle => (
+                                            <div key={moduleTitle} className="space-y-1">
+                                                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wide">{moduleTitle}</label>
+                                                <textarea
+                                                    value={pdfModuleObservations[moduleTitle] || ''}
+                                                    onChange={(e) => setPdfModuleObservations(prev => ({ ...prev, [moduleTitle]: e.target.value }))}
+                                                    placeholder={`Observação para ${moduleTitle}...`}
+                                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[80px] text-sm dark:text-white"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 shrink-0">
+                            <button
+                                onClick={() => setIsConfigModalOpen(false)}
+                                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                            >
+                                Salvar Configuração
                             </button>
                         </div>
                     </div>

@@ -500,6 +500,7 @@ export const updateItemDetails = async (
   details: {
     preco?: number;
     data_para_entrega?: string;
+    observacao?: string;
   }
 ): Promise<void> => {
   const { error } = await supabase

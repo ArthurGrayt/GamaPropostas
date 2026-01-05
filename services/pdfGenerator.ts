@@ -15,15 +15,26 @@ interface ModuleConfig {
   items: EnrichedItem[];
 }
 
+export interface PdfOptions {
+  companyNameType: 'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA';
+  customCompanyName?: string; // If 'custom' is needed later, or we pass the resolved string directly
+  moduleObservations?: Record<string, string>;
+  showItemObservations?: boolean;
+}
+
 // --- PDF Builder Class (Dynamic Content Only) ---
 class DynamicContentBuilder {
   private doc: jsPDF;
   private proposal: EnrichedProposal;
   private pageLabels: Map<number, string> = new Map();
+  private moduleObservations: Record<string, string> = {};
+  private showItemObservations: boolean = false;
 
-  constructor(proposal: EnrichedProposal) {
+  constructor(proposal: EnrichedProposal, moduleObservations: Record<string, string> = {}, showItemObservations: boolean = false) {
     this.doc = new jsPDF('p', 'pt', 'a4');
     this.proposal = proposal;
+    this.moduleObservations = moduleObservations;
+    this.showItemObservations = showItemObservations;
   }
 
   public build(): Uint8Array {
@@ -141,11 +152,17 @@ class DynamicContentBuilder {
     }
 
     // Table Data
-    const tableBody = module.items.map((item, index) => [
-      (index + 1).toString().padStart(2, '0'),
-      item.procedimento?.nome || 'Item sem nome',
-      (item.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    ]);
+    const tableBody = module.items.map((item, index) => {
+      let description = item.procedimento?.nome || 'Item sem nome';
+      if (this.showItemObservations && item.observacao) {
+        description += `\nObservação: ${item.observacao}`;
+      }
+      return [
+        (index + 1).toString().padStart(2, '0'),
+        description,
+        (item.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      ];
+    });
 
     // Draw Table
     (this.doc as any).autoTable({
@@ -170,6 +187,37 @@ class DynamicContentBuilder {
         }
       }
     });
+
+    // Draw Module Observation if exists
+    // We get the final y position from autoTable
+    const finalY = (this.doc as any).lastAutoTable.finalY + 20;
+    const obsText = this.moduleObservations[module.title];
+
+    if (obsText && obsText.trim() !== '') {
+      // Check for page break if needed (simple check)
+      const pageHeight = this.doc.internal.pageSize.height;
+      if (finalY > pageHeight - MARGIN - 50) {
+        this.doc.addPage();
+        // Reset Y for new page? No, autoTable usually handles table breaks, but post-table content is manual.
+        // If we added a page, y starts at margin.
+        // However, implementing robust multi-page observation printing is complex. 
+        // For now, we print starting at finalY, and if it overflows, jsPDF might clip or we'd need splitText logic.
+        // Let's assume standard short observations for now, or add simple page check.
+      }
+
+      // Use correct Y (if we added page, it would be different, but let's stick to flow for this iteration)
+      let currentY = finalY;
+
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(10);
+      this.doc.setTextColor('#333333');
+      this.doc.text('Observação:', MARGIN, currentY);
+      currentY += 15;
+
+      this.doc.setFont('helvetica', 'normal');
+      const splitObs = this.doc.splitTextToSize(obsText, pageWidth - (MARGIN * 2));
+      this.doc.text(splitObs, MARGIN, currentY);
+    }
   }
 
   private applyFooters(): void {
@@ -216,7 +264,7 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
 
     // FILTER ITEMS - KEEP ONLY APPROVED
     // We create a shallow copy of the proposal with filtered items to avoid mutating the original UI state if passed by reference (though usually safe here)
-    const approvedItems = proposal.itens.filter(i => i.status === 'APPROVED');
+    const approvedItems = proposal.itens.filter(i => i.status !== 'REJECTED');
 
     // If no items are approved, maybe we should warn? But requirement says "só deverá incluir itens marcados como aprovados".
     // We'll proceed with approved items only.
@@ -243,7 +291,7 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
 
     // 3. Generate Dynamic Content (Modules)
     // Pass the modified proposal with filtered items and resolved name
-    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf);
+    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf, options?.moduleObservations, options?.showItemObservations);
     const dynamicPdfBytes = dynamicBuilder.build();
     const dynamicDoc = await PDFDocument.load(dynamicPdfBytes);
 

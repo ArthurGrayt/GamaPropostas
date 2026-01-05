@@ -71,6 +71,7 @@ export interface ItemProposta {
   preco?: number;
   data_para_entrega?: string;
   data_entregue?: string;
+  observacao?: string;
 }
 
 export interface Proposta {
@@ -91,6 +92,7 @@ export interface EnrichedItem extends Omit<ItemProposta, 'status'> {
   total: number;
   modalidade: string; // Inferred from price, not stored in DB
   status: ItemStatus; // Re-added as required, will be inferred for the UI.
+  observacao?: string;
 }
 
 export interface EnrichedProposal extends Proposta {
