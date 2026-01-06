@@ -64,7 +64,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [activeCategoriaId, setActiveCategoriaId] = useState<number | 'ALL'>('ALL');
 
   const [isCreatingClient, setIsCreatingClient] = useState(false);
-  const [newClientData, setNewClientData] = useState({ nomeFantasia: '', razaoSocial: '', email: '', phone: '' });
+  const [newClientData, setNewClientData] = useState({ nomeFantasia: '', razaoSocial: '', email: '', phone: '', cnpj: '' });
   const [isSavingNewClient, setIsSavingNewClient] = useState(false);
 
   // Client Modality Persistence
@@ -383,6 +383,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       newClientData.razaoSocial,
       newClientData.email,
       newClientData.phone,
+      newClientData.cnpj,
       undefined
     );
 
@@ -405,7 +406,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         setSelectedUnitId(unitResult.data.id);
 
         setIsCreatingClient(false);
-        setNewClientData({ nomeFantasia: '', razaoSocial: '', email: '', phone: '' });
+        setNewClientData({ nomeFantasia: '', razaoSocial: '', email: '', phone: '', cnpj: '' });
       } else {
         alert('Erro ao criar unidade automática: ' + unitResult.error);
       }
@@ -747,6 +748,16 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                   onChange={e => setNewClientData({ ...newClientData, razaoSocial: e.target.value })}
                   className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
                   placeholder="Razão Social Ltda"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">CNPJ</label>
+                <input
+                  type="text"
+                  value={newClientData.cnpj}
+                  onChange={e => setNewClientData({ ...newClientData, cnpj: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  placeholder="00.000.000/0000-00"
                 />
               </div>
               <div>

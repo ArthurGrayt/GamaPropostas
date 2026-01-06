@@ -33,6 +33,7 @@ export interface Client {
   nome: string; // Display name (fallback or derived)
   nome_fantasia: string; // Now required/primary
   razao_social: string; // Now required/primary
+  cnpj?: string; // CNPJ
   avatar?: string;
   cliente_propostas?: number[];
   clientefrequente?: boolean;

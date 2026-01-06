@@ -813,6 +813,7 @@ export const createNewClient = async (
   razaoSocial: string,
   email?: string,
   phone?: string,
+  cnpj?: string,
   proposalId?: number
 ): Promise<{ success: boolean; data?: Client; error?: string }> => {
   try {
@@ -821,6 +822,7 @@ export const createNewClient = async (
       razao_social: razaoSocial,
       email: email || null,
       telefone: phone || null,
+      cnpj: cnpj || null,
       clientefrequente: false,
     };
 
@@ -841,6 +843,7 @@ export const createNewClient = async (
       nome: data.nome_fantasia || data.razao_social || nomeFantasia,
       nome_fantasia: data.nome_fantasia,
       razao_social: data.razao_social,
+      cnpj: data.cnpj,
       avatar: data.avatar
     };
 
