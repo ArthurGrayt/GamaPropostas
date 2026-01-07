@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
-import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User } from 'lucide-react';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
 
 interface Props {
@@ -64,8 +64,13 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [activeCategoriaId, setActiveCategoriaId] = useState<number | 'ALL'>('ALL');
 
   const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [modalTab, setModalTab] = useState<'client' | 'unit'>('client');
   const [newClientData, setNewClientData] = useState({ nomeFantasia: '', razaoSocial: '', email: '', phone: '', cnpj: '' });
+  const [newUnitData, setNewUnitData] = useState({ name: '', companyId: '' });
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isSavingNewClient, setIsSavingNewClient] = useState(false);
+  const [isSavingNewUnit, setIsSavingNewUnit] = useState(false);
 
   // Client Modality Persistence
   const [showModalityConfirmation, setShowModalityConfirmation] = useState<{ show: boolean, newModality: PriceTierKey | null }>({ show: false, newModality: null });
@@ -416,6 +421,49 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     }
   };
 
+  const handleCreateUnit = async () => {
+    if (!newUnitData.name.trim()) {
+      alert('O nome da unidade é obrigatório.');
+      return;
+    }
+    if (!newUnitData.companyId) {
+      alert('Selecione uma empresa.');
+      return;
+    }
+
+    setIsSavingNewUnit(true);
+    const result = await createUnit(newUnitData.name, newUnitData.companyId);
+    setIsSavingNewUnit(false);
+
+    if (result.success && result.data) {
+      // Update catalog
+      setCatalog(prev => ({
+        ...prev,
+        unidades: [...prev.unidades, result.data!]
+      }));
+
+      // Select the new unit
+      setSelectedClientId(newUnitData.companyId);
+      setSelectedUnitId(result.data.id);
+
+      setIsCreatingClient(false);
+      setNewUnitData({ name: '', companyId: '' });
+      setCompanySearchQuery('');
+    } else {
+      alert('Erro ao criar unidade: ' + result.error);
+    }
+  };
+
+  const filteredCompanies = useMemo(() => {
+    if (!companySearchQuery) return catalog.clientes;
+    const lower = companySearchQuery.toLowerCase();
+    return catalog.clientes.filter(c =>
+      c.nome.toLowerCase().includes(lower) ||
+      (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(lower)) ||
+      (c.razao_social && c.razao_social.toLowerCase().includes(lower))
+    );
+  }, [catalog.clientes, companySearchQuery]);
+
   const handleCreateProcedure = async () => {
     if (!newProcedureData.name.trim()) {
       alert('O nome do procedimento é obrigatório.');
@@ -723,71 +771,194 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
       {isCreatingClient && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
-            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
-              <h3 className="font-bold text-zinc-800 dark:text-white">Novo Cliente</h3>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-visible border border-zinc-200 dark:border-zinc-800 animate-scale-in flex flex-col max-h-[90vh] min-h-[600px]">
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50 rounded-t-2xl">
+              <h3 className="font-bold text-zinc-800 dark:text-white">Gerenciar Cadastro</h3>
               <button onClick={() => setIsCreatingClient(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome Fantasia *</label>
-                <input
-                  type="text"
-                  value={newClientData.nomeFantasia}
-                  onChange={e => setNewClientData({ ...newClientData, nomeFantasia: e.target.value })}
-                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                  placeholder="Nome Fantasia"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Razão Social *</label>
-                <input
-                  type="text"
-                  value={newClientData.razaoSocial}
-                  onChange={e => setNewClientData({ ...newClientData, razaoSocial: e.target.value })}
-                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                  placeholder="Razão Social Ltda"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">CNPJ</label>
-                <input
-                  type="text"
-                  value={newClientData.cnpj}
-                  onChange={e => setNewClientData({ ...newClientData, cnpj: e.target.value })}
-                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                  placeholder="00.000.000/0000-00"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Email</label>
-                <input
-                  type="email"
-                  value={newClientData.email}
-                  onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
-                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Telefone</label>
-                <input
-                  type="tel"
-                  value={newClientData.phone}
-                  onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
-                  className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                  placeholder="(00) 00000-0000"
-                />
-              </div>
+
+            <div className="px-4 pt-4 flex gap-4 border-b border-zinc-100 dark:border-zinc-800">
               <button
-                onClick={handleCreateClient}
-                disabled={isSavingNewClient || !newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim()}
-                className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                onClick={() => setModalTab('client')}
+                className={cn(
+                  "flex-1 pb-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors",
+                  modalTab === 'client' ? "border-blue-500 text-blue-600 dark:text-blue-400" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                )}
               >
-                {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-                Criar Cliente
+                <User size={16} /> Novo Cliente
               </button>
+              <button
+                onClick={() => setModalTab('unit')}
+                className={cn(
+                  "flex-1 pb-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors",
+                  modalTab === 'unit' ? "border-blue-500 text-blue-600 dark:text-blue-400" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                )}
+              >
+                <Building2 size={16} /> Nova Unidade
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {modalTab === 'client' ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome Fantasia *</label>
+                    <input
+                      type="text"
+                      value={newClientData.nomeFantasia}
+                      onChange={e => setNewClientData({ ...newClientData, nomeFantasia: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                      placeholder="Nome Fantasia"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Razão Social *</label>
+                    <input
+                      type="text"
+                      value={newClientData.razaoSocial}
+                      onChange={e => setNewClientData({ ...newClientData, razaoSocial: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                      placeholder="Razão Social Ltda"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">CNPJ</label>
+                    <input
+                      type="text"
+                      value={newClientData.cnpj}
+                      onChange={e => setNewClientData({ ...newClientData, cnpj: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                      placeholder="00.000.000/0000-00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Email</label>
+                    <input
+                      type="email"
+                      value={newClientData.email}
+                      onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                      placeholder="email@exemplo.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Telefone</label>
+                    <input
+                      type="tel"
+                      value={newClientData.phone}
+                      onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+                  <button
+                    onClick={handleCreateClient}
+                    disabled={isSavingNewClient || !newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim()}
+                    className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                    Criar Cliente
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="relative">
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Empresa (Cliente) *</label>
+                    <div
+                      className="relative"
+                    >
+                      <input
+                        type="text"
+                        value={companySearchQuery || (catalog.clientes.find(c => String(c.id) === newUnitData.companyId)?.nome || '')}
+                        onChange={(e) => {
+                          setCompanySearchQuery(e.target.value);
+                          setNewUnitData(prev => ({ ...prev, companyId: '' })); // Clear selection on type
+                          setIsCompanyDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsCompanyDropdownOpen(true)}
+                        className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none pr-10"
+                        placeholder="Buscar empresa..."
+                      />
+                      {newUnitData.companyId ? (
+                        <button
+                          onClick={() => {
+                            setNewUnitData(prev => ({ ...prev, companyId: '' }));
+                            setCompanySearchQuery('');
+                            setIsCompanyDropdownOpen(true);
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                        >
+                          <X size={16} />
+                        </button>
+                      ) : (
+                        <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 rotate-90" size={16} />
+                      )}
+
+                      {isCompanyDropdownOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setIsCompanyDropdownOpen(false)}
+                          ></div>
+                          <div className="absolute top-full left-0 w-full mt-1 max-h-48 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-20">
+                            {filteredCompanies.length === 0 ? (
+                              <div className="p-3 text-center">
+                                <p className="text-sm text-zinc-500 mb-2">Empresa não encontrada.</p>
+                                <button
+                                  onClick={() => {
+                                    setNewClientData(prev => ({ ...prev, nomeFantasia: companySearchQuery }));
+                                    setModalTab('client');
+                                    setIsCompanyDropdownOpen(false);
+                                  }}
+                                  className="text-sm font-semibold text-blue-600 hover:underline"
+                                >
+                                  Criar Empresa Principal
+                                </button>
+                              </div>
+                            ) : (
+                              filteredCompanies.map(c => (
+                                <button
+                                  key={c.id}
+                                  onClick={() => {
+                                    setNewUnitData(prev => ({ ...prev, companyId: String(c.id) }));
+                                    setCompanySearchQuery('');
+                                    setIsCompanyDropdownOpen(false);
+                                  }}
+                                  className="w-full text-left p-3 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm border-b last:border-0 border-zinc-100 dark:border-zinc-800"
+                                >
+                                  <div className="font-semibold">{c.nome_fantasia || c.nome}</div>
+                                  <div className="text-xs text-zinc-500">{c.razao_social}</div>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome da Unidade *</label>
+                    <input
+                      type="text"
+                      value={newUnitData.name}
+                      onChange={e => setNewUnitData({ ...newUnitData, name: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                      placeholder="Ex: Matriz, Filial SP..."
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleCreateUnit}
+                    disabled={isSavingNewUnit || !newUnitData.name.trim() || !newUnitData.companyId}
+                    className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    {isSavingNewUnit ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                    Criar Unidade
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
