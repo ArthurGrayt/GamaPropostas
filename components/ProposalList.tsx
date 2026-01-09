@@ -19,6 +19,11 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
+    const [dateFilter, setDateFilter] = useState<{
+        type: 'ALL' | 'DATE' | 'MONTH';
+        value: string;
+    }>({ type: 'ALL', value: '' });
+
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<number | null>(null);
 
     // Persistence State
@@ -57,21 +62,42 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
     }, [proposals]);
 
     const filteredProposals = useMemo(() => {
-        const sourceData = activeFilter === 'ARCHIVED' ? archivedProposals : activeProposals;
+        let sourceData = activeFilter === 'ARCHIVED' ? archivedProposals : activeProposals;
 
-        const sourceWithStatusFilter = (activeFilter === 'ALL' || activeFilter === 'ARCHIVED')
-            ? sourceData
-            : sourceData.filter(p => p.status === activeFilter);
-
-        if (!searchQuery) {
-            return sourceWithStatusFilter;
+        // 1. Filter by Status (if not ALL and not ARCHIVED logic) - handled partly by sourceData selection
+        if (activeFilter !== 'ALL' && activeFilter !== 'ARCHIVED') {
+            sourceData = sourceData.filter(p => p.status === activeFilter);
         }
 
-        return sourceWithStatusFilter.filter(p =>
+        // 2. Filter by Date
+        if (dateFilter.type !== 'ALL' && dateFilter.value) {
+            sourceData = sourceData.filter(p => {
+                const proposalDate = new Date(p.created_at);
+                const year = proposalDate.getFullYear();
+                const month = String(proposalDate.getMonth() + 1).padStart(2, '0');
+
+                if (dateFilter.type === 'DATE') {
+                    const day = String(proposalDate.getDate()).padStart(2, '0');
+                    const pDateStr = `${year}-${month}-${day}`;
+                    return pDateStr === dateFilter.value;
+                } else if (dateFilter.type === 'MONTH') {
+                    const pMonthStr = `${year}-${month}`;
+                    return pMonthStr === dateFilter.value;
+                }
+                return true;
+            });
+        }
+
+        // 3. Filter by Search Query
+        if (!searchQuery) {
+            return sourceData;
+        }
+
+        return sourceData.filter(p =>
             p.cliente.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
             String(p.id).includes(searchQuery)
         );
-    }, [activeProposals, archivedProposals, searchQuery, activeFilter]);
+    }, [activeProposals, archivedProposals, searchQuery, activeFilter, dateFilter]);
 
     const getStatusVisuals = (status: string) => {
         switch (status) {
@@ -175,11 +201,36 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
                     </div>
                 )}
 
-                <SearchBar
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                    placeholder="Buscar por cliente ou ID..."
-                />
+                <div className="flex flex-col md:flex-row gap-4">
+                    <SearchBar
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Buscar por cliente ou ID..."
+                        className="flex-grow"
+                    />
+
+                    {/* Date Filters */}
+                    <div className="flex items-center gap-2 bg-white dark:bg-zinc-800 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                        <select
+                            value={dateFilter.type}
+                            onChange={(e) => setDateFilter({ type: e.target.value as any, value: '' })}
+                            className="bg-transparent text-sm font-medium text-zinc-700 dark:text-zinc-300 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="ALL">Todas as datas</option>
+                            <option value="DATE">Por Dia</option>
+                            <option value="MONTH">Por Mês</option>
+                        </select>
+
+                        {dateFilter.type !== 'ALL' && (
+                            <input
+                                type={dateFilter.type === 'DATE' ? 'date' : 'month'}
+                                value={dateFilter.value}
+                                onChange={(e) => setDateFilter(prev => ({ ...prev, value: e.target.value }))}
+                                className="bg-zinc-100 dark:bg-zinc-900 border-none text-sm text-zinc-700 dark:text-zinc-300 rounded-md p-2 focus:ring-2 focus:ring-blue-500"
+                            />
+                        )}
+                    </div>
+                </div>
 
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
                     <FilterPill
