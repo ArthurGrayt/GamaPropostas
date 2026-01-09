@@ -61,32 +61,41 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
         return { activeProposals: active, archivedProposals: archived };
     }, [proposals]);
 
+    const getDateMatches = (p: EnrichedProposal) => {
+        if (dateFilter.type === 'ALL' || !dateFilter.value) return true;
+
+        const proposalDate = new Date(p.created_at);
+        const year = proposalDate.getFullYear();
+        const month = String(proposalDate.getMonth() + 1).padStart(2, '0');
+
+        if (dateFilter.type === 'DATE') {
+            const day = String(proposalDate.getDate()).padStart(2, '0');
+            const pDateStr = `${year}-${month}-${day}`;
+            return pDateStr === dateFilter.value;
+        } else if (dateFilter.type === 'MONTH') {
+            const pMonthStr = `${year}-${month}`;
+            return pMonthStr === dateFilter.value;
+        }
+        return true;
+    };
+
+    const dateFilteredActiveProposals = useMemo(() => {
+        return activeProposals.filter(getDateMatches);
+    }, [activeProposals, dateFilter]);
+
+    const dateFilteredArchivedProposals = useMemo(() => {
+        return archivedProposals.filter(getDateMatches);
+    }, [archivedProposals, dateFilter]);
+
     const filteredProposals = useMemo(() => {
-        let sourceData = activeFilter === 'ARCHIVED' ? archivedProposals : activeProposals;
+        let sourceData = activeFilter === 'ARCHIVED' ? dateFilteredArchivedProposals : dateFilteredActiveProposals;
 
         // 1. Filter by Status (if not ALL and not ARCHIVED logic) - handled partly by sourceData selection
         if (activeFilter !== 'ALL' && activeFilter !== 'ARCHIVED') {
             sourceData = sourceData.filter(p => p.status === activeFilter);
         }
 
-        // 2. Filter by Date
-        if (dateFilter.type !== 'ALL' && dateFilter.value) {
-            sourceData = sourceData.filter(p => {
-                const proposalDate = new Date(p.created_at);
-                const year = proposalDate.getFullYear();
-                const month = String(proposalDate.getMonth() + 1).padStart(2, '0');
-
-                if (dateFilter.type === 'DATE') {
-                    const day = String(proposalDate.getDate()).padStart(2, '0');
-                    const pDateStr = `${year}-${month}-${day}`;
-                    return pDateStr === dateFilter.value;
-                } else if (dateFilter.type === 'MONTH') {
-                    const pMonthStr = `${year}-${month}`;
-                    return pMonthStr === dateFilter.value;
-                }
-                return true;
-            });
-        }
+        // 2. Filter by Date (Already done in sourceData)
 
         // 3. Filter by Search Query
         if (!searchQuery) {
@@ -97,7 +106,7 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
             p.cliente.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
             String(p.id).includes(searchQuery)
         );
-    }, [activeProposals, archivedProposals, searchQuery, activeFilter, dateFilter]);
+    }, [dateFilteredActiveProposals, dateFilteredArchivedProposals, searchQuery, activeFilter]);
 
     const getStatusVisuals = (status: string) => {
         switch (status) {
@@ -237,31 +246,31 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
                         label="Todas"
                         isActive={activeFilter === 'ALL'}
                         onClick={() => setActiveFilter('ALL')}
-                        count={activeProposals.length}
+                        count={dateFilteredActiveProposals.length}
                     />
                     <FilterPill
                         label="Pendentes"
                         isActive={activeFilter === 'PENDING'}
                         onClick={() => setActiveFilter('PENDING')}
-                        count={activeProposals.filter(p => p.status === 'PENDING').length}
+                        count={dateFilteredActiveProposals.filter(p => p.status === 'PENDING').length}
                     />
                     <FilterPill
                         label="Aprovadas"
                         isActive={activeFilter === 'APPROVED'}
                         onClick={() => setActiveFilter('APPROVED')}
-                        count={activeProposals.filter(p => p.status === 'APPROVED').length}
+                        count={dateFilteredActiveProposals.filter(p => p.status === 'APPROVED').length}
                     />
                     <FilterPill
                         label="Reprovadas"
                         isActive={activeFilter === 'REJECTED'}
                         onClick={() => setActiveFilter('REJECTED')}
-                        count={activeProposals.filter(p => p.status === 'REJECTED').length}
+                        count={dateFilteredActiveProposals.filter(p => p.status === 'REJECTED').length}
                     />
                     <FilterPill
                         label="Arquivadas"
                         isActive={activeFilter === 'ARCHIVED'}
                         onClick={() => setActiveFilter('ARCHIVED')}
-                        count={archivedProposals.length}
+                        count={dateFilteredArchivedProposals.length}
                     />
                 </div>
             </section>
