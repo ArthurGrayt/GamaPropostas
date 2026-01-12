@@ -186,6 +186,12 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
                                                         <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">
                                                             {(item.total || item.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                         </span>
+                                                        {item.data_para_entrega && (
+                                                            <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-900/30">
+                                                                <Clock size={12} />
+                                                                <span className="font-semibold">Prazo: {new Date(item.data_para_entrega).toLocaleDateString('pt-BR')}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 

@@ -247,8 +247,8 @@ export const ClientSelector: React.FC<{
       </div>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-neutral-200 dark:border-zinc-800 overflow-hidden z-50 animate-fade-in origin-top">
-          <div className="p-2 border-b border-neutral-100 dark:border-zinc-800">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-neutral-200 dark:border-zinc-800 overflow-hidden z-[9999] animate-fade-in origin-top">
+          <div className="p-3 border-b border-neutral-100 dark:border-zinc-800">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
               <input
@@ -256,15 +256,18 @@ export const ClientSelector: React.FC<{
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar unidade..."
-                className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                className="w-full pl-9 pr-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-zinc-700 dark:text-zinc-200"
                 autoFocus
               />
             </div>
           </div>
 
-          <div className="max-h-[240px] overflow-y-auto custom-scrollbar p-1">
+          <div className="max-h-[280px] overflow-y-auto custom-scrollbar p-1.5 space-y-1">
             {filteredUnits.length === 0 && (
-              <div className="py-4 text-center text-zinc-400 text-sm">Nenhuma unidade encontrada.</div>
+              <div className="py-8 text-center flex flex-col items-center gap-2 text-zinc-400">
+                <Search size={24} className="opacity-20" />
+                <span className="text-sm">Nenhuma unidade encontrada.</span>
+              </div>
             )}
             {filteredUnits.map(unit => (
               <button
@@ -275,28 +278,33 @@ export const ClientSelector: React.FC<{
                   setSearch('');
                 }}
                 className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between group transition-colors",
+                  "w-full text-left px-3 py-3 rounded-xl flex items-center justify-between group transition-all",
                   selectedUnitId === unit.id
-                    ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                    : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                    ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
                 )}
               >
                 <div className="overflow-hidden">
-                  <p className="font-medium truncate text-sm"><span className="text-zinc-400 font-normal">Unidade:</span> {unit.nome_unidade}</p>
-                  <p className="text-xs text-zinc-500 truncate"><span className="text-zinc-400">Cliente:</span> {unit.clientName}</p>
+                  <p className="truncate text-sm flex items-center gap-2">
+                    <span className="font-semibold text-zinc-900 dark:text-white">{unit.nome_unidade}</span>
+                  </p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5 flex items-center gap-1">
+                    <User size={10} />
+                    {unit.clientName}
+                  </p>
                 </div>
-                {selectedUnitId === unit.id && <Check size={16} />}
+                {selectedUnitId === unit.id && <Check size={16} className="text-blue-600 dark:text-blue-400" />}
               </button>
             ))}
           </div>
 
-          <div className="p-2 border-t border-neutral-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <div className="p-2 border-t border-neutral-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 backdrop-blur-sm">
             <button
               onClick={() => {
                 onCreateNew();
                 setIsOpen(false);
               }}
-              className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+              className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30"
             >
               <Plus size={16} />
               Minha unidade não está aqui

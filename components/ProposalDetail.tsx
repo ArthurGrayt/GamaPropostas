@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
-import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector } from './UIComponents';
-import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings, Share2 } from 'lucide-react';
-import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg } from '../services/mockData';
+import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector, cn } from './UIComponents';
+import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings, Share2, Building2, User, ChevronRight } from 'lucide-react';
+import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg, createUnit } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
 interface Props {
@@ -143,6 +143,70 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [docSegObs, setDocSegObs] = useState('');
     const [isSavingDocSeg, setIsSavingDocSeg] = useState(false);
 
+    // Deadline Config Modal State
+    const [isDeadlineModalOpen, setIsDeadlineModalOpen] = useState(false);
+    const [globalDeadline, setGlobalDeadline] = useState('');
+    const [itemDeadlines, setItemDeadlines] = useState<Record<number, string>>({});
+    const [isSavingDeadlines, setIsSavingDeadlines] = useState(false);
+
+    const openDeadlineModal = () => {
+        // Initialize with existing deadlines
+        const currentDeadlines: Record<number, string> = {};
+        proposal.itens.forEach(item => {
+            if (item.data_para_entrega) {
+                // Formatting for input[type="date"] (YYYY-MM-DD)
+                // Assuming stored as ISO string, take first 10 chars
+                currentDeadlines[item.id] = item.data_para_entrega.split('T')[0];
+            }
+        });
+        setItemDeadlines(currentDeadlines);
+        setGlobalDeadline('');
+        setIsDeadlineModalOpen(true);
+    };
+
+    const handleApplyGlobalDeadline = () => {
+        if (!globalDeadline) return;
+        const newDeadlines = { ...itemDeadlines };
+        proposal.itens.forEach(item => {
+            newDeadlines[item.id] = globalDeadline;
+        });
+        setItemDeadlines(newDeadlines);
+    };
+
+    const handleConfirmDeadlines = async () => {
+        setIsSavingDeadlines(true);
+        try {
+            // Update all items with new deadlines
+            const updates = proposal.itens.map(item => {
+                const newDeadline = itemDeadlines[item.id];
+                // Determine if changed.
+                const current = item.data_para_entrega ? item.data_para_entrega.split('T')[0] : '';
+
+                if (newDeadline && newDeadline !== current) {
+                    return updateItemDetails(item.id, {
+                        data_para_entrega: new Date(newDeadline).toISOString()
+                    });
+                }
+                return Promise.resolve();
+            });
+
+            await Promise.all(updates);
+
+            // Refresh Data
+            onUpdate();
+
+            // Close this modal and Open Share Modal
+            setIsDeadlineModalOpen(false);
+            setIsShareModalOpen(true);
+
+        } catch (error) {
+            console.error("Error saving deadlines:", error);
+            alert("Erro ao salvar prazos.");
+        } finally {
+            setIsSavingDeadlines(false);
+        }
+    };
+
     const handleItemStatusUpdate = async (itemId: number, uiKey: string, newStatus: ItemStatus) => {
         setOpenStatusMenu(null);
 
@@ -218,6 +282,23 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
     // Share Modal State
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+    // New Client/Unit Modal State
+    const [modalTab, setModalTab] = useState<'client' | 'unit'>('client');
+    const [newUnitData, setNewUnitData] = useState({ name: '', companyId: '' });
+    const [companySearchQuery, setCompanySearchQuery] = useState('');
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+    const [isSavingNewUnit, setIsSavingNewUnit] = useState(false);
+
+    const filteredCompanies = useMemo(() => {
+        if (!companySearchQuery) return catalog.clientes;
+        const lower = companySearchQuery.toLowerCase();
+        return catalog.clientes.filter(c =>
+            c.nome.toLowerCase().includes(lower) ||
+            (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(lower)) ||
+            (c.razao_social && c.razao_social.toLowerCase().includes(lower))
+        );
+    }, [catalog.clientes, companySearchQuery]);
 
     // Identify unique modules for the Observation tab
     // We match the module titles used in pdfGenerator manually or infer them?
@@ -386,33 +467,90 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         }
 
         setIsSavingNewClient(true);
-        const result = await createNewClient(
+        // 1. Create Client
+        const clientResult = await createNewClient(
             newClientData.name,
             newClientData.email,
             newClientData.phone,
-            proposal.id
+            proposal.id // We still pass proposal ID to link it immediately if possible
         );
-        setIsSavingNewClient(false);
+
+        if (clientResult.success && clientResult.data) {
+            // 2. Create Default Unit (Copying logic from ProposalCreate to be consistent)
+            // Use the client name (or fancy name if we had it separately, but here we just have name) as default unit name
+            const unitResult = await createUnit(newClientData.name, clientResult.data.id);
+
+            setIsSavingNewClient(false);
+
+            if (unitResult.success && unitResult.data) {
+                // Update catalog locally
+                setCatalog(prev => ({
+                    ...prev,
+                    clientes: [...prev.clientes, clientResult.data!],
+                    unidades: [...prev.unidades, unitResult.data!]
+                }));
+
+                // Select the new client AND unit
+                setSelectedClientId(String(clientResult.data.id));
+                // If we could select unit here we would, but ProposalDetail mainly tracks client. 
+                // However, createNewClient (mock) might have auto-linked if we passed proposal.id.
+                // Let's rely on onUpdate to refresh proposal data.
+
+                // Close modal
+                setIsCreatingClient(false);
+                setNewClientData({ name: '', email: '', phone: '' });
+
+                onUpdate();
+                setIsEditingClient(false);
+            } else {
+                alert('Cliente criado, mas erro ao criar unidade automática: ' + unitResult.error);
+                // Even if unit failed, client was created, so we might want to refresh
+                onUpdate();
+                setIsCreatingClient(false);
+            }
+        } else {
+            setIsSavingNewClient(false);
+            alert('Erro ao criar cliente: ' + clientResult.error);
+        }
+    };
+
+    const handleCreateUnit = async () => {
+        if (!newUnitData.name.trim()) {
+            alert('O nome da unidade é obrigatório.');
+            return;
+        }
+        if (!newUnitData.companyId) {
+            alert('Selecione uma empresa.');
+            return;
+        }
+
+        setIsSavingNewUnit(true);
+        const result = await createUnit(newUnitData.name, newUnitData.companyId);
+        setIsSavingNewUnit(false);
 
         if (result.success && result.data) {
-            // Update catalog locally to include the new client immediately
+            // Update catalog
             setCatalog(prev => ({
                 ...prev,
-                clientes: [...prev.clientes, result.data!]
+                unidades: [...prev.unidades, result.data!]
             }));
 
-            // Select the new client
-            setSelectedClientId(String(result.data.id));
+            // If the unit belongs to the CURRENTLY selected client, we might want to select it functionality-wise, 
+            // but in this view we mostly just select Client. 
+            // If the user created a unit for the *currently selected client*, it's good.
+            if (newUnitData.companyId === selectedClientId) {
+                // Good.
+            } else {
+                // If they created a unit for another client, maybe switch to that client?
+                setSelectedClientId(newUnitData.companyId);
+            }
 
-            // Close modal
             setIsCreatingClient(false);
-            setNewClientData({ name: '', email: '', phone: '' });
-
-            // Since createNewClient already linked the proposal, we can just refresh
+            setNewUnitData({ name: '', companyId: '' });
+            setCompanySearchQuery('');
             onUpdate();
-            setIsEditingClient(false); // Exit edit mode as well since we're done
         } else {
-            alert('Erro ao criar cliente: ' + result.error);
+            alert('Erro ao criar unidade: ' + result.error);
         }
     };
 
@@ -511,7 +649,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="space-y-6 lg:col-span-1">
-                    <GlassCard className="flex flex-col items-center text-center py-10 relative group">
+                    <GlassCard className="flex flex-col items-center text-center py-10 relative group z-20">
                         {!isEditingClient ? (
                             <>
                                 <button
@@ -607,7 +745,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                         label="Compartilhar Proposta"
                                         variant="neutral"
                                         icon={<Share2 size={18} />}
-                                        onClick={() => setIsShareModalOpen(true)}
+                                        onClick={openDeadlineModal}
                                     />
                                     <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
                                     <ActionButton
@@ -898,51 +1036,173 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
             {isCreatingClient && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
-                        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
-                            <h3 className="font-bold text-zinc-800 dark:text-white">Novo Cliente</h3>
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-visible border border-zinc-200 dark:border-zinc-800 animate-scale-in flex flex-col max-h-[90vh] min-h-[600px]">
+                        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50 rounded-t-2xl">
+                            <h3 className="font-bold text-zinc-800 dark:text-white">Gerenciar Cadastro</h3>
                             <button onClick={() => setIsCreatingClient(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
                         </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
-                                <input
-                                    type="text"
-                                    value={newClientData.name}
-                                    onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
-                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                                    placeholder="Nome do Cliente ou Empresa"
-                                    autoFocus
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Email</label>
-                                <input
-                                    type="email"
-                                    value={newClientData.email}
-                                    onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
-                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                                    placeholder="email@exemplo.com"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Telefone</label>
-                                <input
-                                    type="tel"
-                                    value={newClientData.phone}
-                                    onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
-                                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                                    placeholder="(00) 00000-0000"
-                                />
-                            </div>
+
+                        <div className="px-4 pt-4 flex gap-4 border-b border-zinc-100 dark:border-zinc-800">
                             <button
-                                onClick={handleCreateClient}
-                                disabled={isSavingNewClient || !newClientData.name.trim()}
-                                className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                                onClick={() => setModalTab('client')}
+                                className={cn(
+                                    "flex-1 pb-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors",
+                                    modalTab === 'client' ? "border-blue-500 text-blue-600 dark:text-blue-400" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                                )}
                             >
-                                {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-                                + Criar Cliente
+                                <User size={16} /> Novo Cliente
                             </button>
+                            <button
+                                onClick={() => setModalTab('unit')}
+                                className={cn(
+                                    "flex-1 pb-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors",
+                                    modalTab === 'unit' ? "border-blue-500 text-blue-600 dark:text-blue-400" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                                )}
+                            >
+                                <Building2 size={16} /> Nova Unidade
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+                            {modalTab === 'client' ? (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
+                                        <input
+                                            type="text"
+                                            value={newClientData.name}
+                                            onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                                            className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            placeholder="Nome do Cliente ou Empresa"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Email</label>
+                                        <input
+                                            type="email"
+                                            value={newClientData.email}
+                                            onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
+                                            className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            placeholder="email@exemplo.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Telefone</label>
+                                        <input
+                                            type="tel"
+                                            value={newClientData.phone}
+                                            onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
+                                            className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            placeholder="(00) 00000-0000"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleCreateClient}
+                                        disabled={isSavingNewClient || !newClientData.name.trim()}
+                                        className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                                    >
+                                        {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                                        + Criar Cliente e Unidade Padrão
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="relative">
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Empresa (Cliente) *</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={companySearchQuery || (catalog.clientes.find(c => String(c.id) === newUnitData.companyId)?.nome || '')}
+                                                onChange={(e) => {
+                                                    setCompanySearchQuery(e.target.value);
+                                                    setNewUnitData(prev => ({ ...prev, companyId: '' }));
+                                                    setIsCompanyDropdownOpen(true);
+                                                }}
+                                                onFocus={() => setIsCompanyDropdownOpen(true)}
+                                                className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none pr-10"
+                                                placeholder="Buscar empresa..."
+                                            />
+                                            {newUnitData.companyId ? (
+                                                <button
+                                                    onClick={() => {
+                                                        setNewUnitData(prev => ({ ...prev, companyId: '' }));
+                                                        setCompanySearchQuery('');
+                                                        setIsCompanyDropdownOpen(true);
+                                                    }}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            ) : (
+                                                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 rotate-90" size={16} />
+                                            )}
+
+                                            {isCompanyDropdownOpen && (
+                                                <>
+                                                    <div
+                                                        className="fixed inset-0 z-10"
+                                                        onClick={() => setIsCompanyDropdownOpen(false)}
+                                                    ></div>
+                                                    <div className="absolute top-full left-0 w-full mt-1 max-h-48 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-20 custom-scrollbar">
+                                                        {filteredCompanies.length === 0 ? (
+                                                            <div className="p-3 text-center">
+                                                                <p className="text-sm text-zinc-500 mb-2">Empresa não encontrada.</p>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        // Switch to create client tab, setting name
+                                                                        setNewClientData(prev => ({ ...prev, name: companySearchQuery }));
+                                                                        setModalTab('client');
+                                                                        setIsCompanyDropdownOpen(false);
+                                                                    }}
+                                                                    className="text-sm font-semibold text-blue-600 hover:underline"
+                                                                >
+                                                                    Criar Empresa Principal
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            filteredCompanies.map(c => (
+                                                                <button
+                                                                    key={c.id}
+                                                                    onClick={() => {
+                                                                        setNewUnitData(prev => ({ ...prev, companyId: String(c.id) }));
+                                                                        setCompanySearchQuery('');
+                                                                        setIsCompanyDropdownOpen(false);
+                                                                    }}
+                                                                    className="w-full text-left p-3 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm border-b last:border-0 border-zinc-100 dark:border-zinc-800"
+                                                                >
+                                                                    <div className="font-semibold">{c.nome_fantasia || c.nome}</div>
+                                                                    {c.razao_social && <div className="text-xs text-zinc-500">{c.razao_social}</div>}
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome da Unidade *</label>
+                                        <input
+                                            type="text"
+                                            value={newUnitData.name}
+                                            onChange={e => setNewUnitData({ ...newUnitData, name: e.target.value })}
+                                            className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            placeholder="Ex: Matriz, Filial SP..."
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={handleCreateUnit}
+                                        disabled={isSavingNewUnit || !newUnitData.name.trim() || !newUnitData.companyId}
+                                        className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
+                                    >
+                                        {isSavingNewUnit ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                                        Criar Unidade
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1197,6 +1457,80 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                     </div>
                 </div>
             )}
+            {/* Deadline Configuration Modal */}
+            {isDeadlineModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center shrink-0">
+                            <div>
+                                <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
+                                    <CalendarClock className="text-blue-500" size={20} />
+                                    Configurar Prazos de Entrega
+                                </h3>
+                                <p className="text-xs text-zinc-500">Defina os prazos de entrega antes de compartilhar.</p>
+                            </div>
+                            <button onClick={() => setIsDeadlineModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-b border-neutral-100 dark:border-zinc-800 shrink-0">
+                            <label className="text-xs font-bold uppercase text-zinc-500 mb-1.5 block">Aplicar Prazo Geral</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="date"
+                                    value={globalDeadline}
+                                    onChange={(e) => setGlobalDeadline(e.target.value)}
+                                    className="flex-1 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
+                                />
+                                <button
+                                    onClick={handleApplyGlobalDeadline}
+                                    className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-sm rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                >
+                                    Aplicar a Todos
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                            {proposal.itens.map((item) => (
+                                <div key={item.uiKey} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800 rounded-xl">
+                                    <div className="flex-1 pr-4">
+                                        <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200">{item.procedimento.nome}</p>
+                                        <p className="text-xs text-zinc-500">{item.modulo.nome}</p>
+                                    </div>
+                                    <div className="w-40">
+                                        <input
+                                            type="date"
+                                            value={itemDeadlines[item.id] || ''}
+                                            onChange={(e) => setItemDeadlines(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                            className={`w-full p-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${!itemDeadlines[item.id] ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900'}`}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t border-neutral-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex justify-end gap-3 shrink-0">
+                            <button
+                                onClick={() => setIsDeadlineModalOpen(false)}
+                                className="px-6 py-2.5 rounded-xl text-zinc-600 dark:text-zinc-400 font-bold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmDeadlines}
+                                disabled={isSavingDeadlines}
+                                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isSavingDeadlines ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                Confirmar e Compartilhar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Share Modal */}
             {isShareModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
