@@ -20,6 +20,11 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
     const [expandedModules, setExpandedModules] = useState<Record<number, boolean>>({});
     const [updatingItems, setUpdatingItems] = useState<Record<number, boolean>>({});
 
+    const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+    const [selectedItemToReject, setSelectedItemToReject] = useState<EnrichedItem | null>(null);
+    const [rejectionReason, setRejectionReason] = useState<string>('');
+    const [customRejectionReason, setCustomRejectionReason] = useState('');
+
     useEffect(() => {
         const fetchProposal = async () => {
             setIsLoading(true);
@@ -38,11 +43,11 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
         fetchProposal();
     }, [proposalId]);
 
-    const handleItemAction = async (item: EnrichedItem, newStatus: ItemStatus) => {
+    const handleItemAction = async (item: EnrichedItem, newStatus: ItemStatus, feedback?: string) => {
         if (!proposal) return;
 
         setUpdatingItems(prev => ({ ...prev, [item.id]: true }));
-        await updateItemStatus(item.id, newStatus);
+        await updateItemStatus(item.id, newStatus, feedback);
 
         // Optimistic update locally
         const updatedItems = proposal.itens.map(i =>
@@ -66,6 +71,21 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
         });
 
         setUpdatingItems(prev => ({ ...prev, [item.id]: false }));
+    };
+
+    const openRejectionModal = (item: EnrichedItem) => {
+        setSelectedItemToReject(item);
+        setRejectionReason('');
+        setCustomRejectionReason('');
+        setRejectionModalOpen(true);
+    };
+
+    const handleConfirmRejection = (reason: string) => {
+        if (selectedItemToReject) {
+            handleItemAction(selectedItemToReject, 'REJECTED', reason);
+            setRejectionModalOpen(false);
+            setSelectedItemToReject(null);
+        }
     };
 
     const groupedItems = useMemo(() => {
@@ -229,7 +249,7 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
                                                     ) : (
                                                         <div className="flex w-full sm:w-auto items-center gap-2">
                                                             <button
-                                                                onClick={() => handleItemAction(item, 'REJECTED')}
+                                                                onClick={() => openRejectionModal(item)}
                                                                 disabled={updatingItems[item.id]}
                                                                 className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/10 dark:hover:text-red-400 dark:hover:border-red-900 transition-all rounded-lg text-sm font-medium active:scale-95 disabled:opacity-50"
                                                             >
@@ -293,6 +313,93 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
                     </div>
                 </div>
             )}
+
+            {/* Rejection Modal */}
+            {rejectionModalOpen && selectedItemToReject && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+                        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+                                Por qual motivo você recusou?
+                            </h3>
+                            <button
+                                onClick={() => setRejectionModalOpen(false)}
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-3">
+                                {['Preço alto', 'Prazo muito longo', 'Não atende minhas necessidades', 'Outro'].map((option) => (
+                                    <label
+                                        key={option}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${rejectionReason === option
+                                            ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-500'
+                                            : 'bg-zinc-50/50 border-zinc-200 hover:bg-zinc-100'
+                                            }`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="rejectionReason"
+                                            value={option}
+                                            checked={rejectionReason === option}
+                                            onChange={(e) => setRejectionReason(e.target.value)}
+                                            className="w-4 h-4 text-blue-600 border-zinc-300 focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                            {option}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            {rejectionReason === 'Outro' && (
+                                <div className="space-y-2 animate-slide-in">
+                                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                        Qual outro motivo?
+                                    </label>
+                                    <textarea
+                                        value={customRejectionReason}
+                                        onChange={(e) => setCustomRejectionReason(e.target.value)}
+                                        className="w-full h-24 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none text-sm"
+                                        placeholder="Digite o motivo..."
+                                        autoFocus
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-3">
+                            <button
+                                onClick={() => {
+                                    const finalReason = rejectionReason === 'Outro' ? customRejectionReason : rejectionReason;
+                                    if (rejectionReason === 'Outro' && !customRejectionReason.trim()) {
+                                        alert('Por favor, digite o motivo.');
+                                        return;
+                                    }
+                                    if (!rejectionReason) {
+                                        alert('Por favor, selecione um motivo.');
+                                        return;
+                                    }
+                                    handleConfirmRejection(finalReason);
+                                }}
+                                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all text-sm"
+                            >
+                                Confirmar Recusa
+                            </button>
+                            <button
+                                onClick={() => handleConfirmRejection('Prefiro não responder')}
+                                className="w-full py-2 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 font-medium text-sm transition-colors"
+                            >
+                                Prefiro não responder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
+

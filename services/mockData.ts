@@ -469,12 +469,16 @@ export const deleteProposal = async (proposalId: number): Promise<{ success: boo
 };
 
 
-export const updateItemStatus = async (itemId: number, status: ItemStatus): Promise<void> => {
+export const updateItemStatus = async (itemId: number, status: ItemStatus, feedback?: string): Promise<void> => {
   // We now always send the 'status' field.
   // We ONLY keep data_entregue logic for backward compatibility or extra metadata.
-  const updatePayload: { status?: string, data_entregue?: string | null } = {
+  const updatePayload: { status?: string, data_entregue?: string | null, feedback?: string } = {
     status: status
   };
+
+  if (feedback !== undefined) {
+    updatePayload.feedback = feedback;
+  }
 
   if (status === 'APPROVED') {
     updatePayload.data_entregue = new Date().toISOString();
@@ -491,7 +495,7 @@ export const updateItemStatus = async (itemId: number, status: ItemStatus): Prom
   if (error) {
     console.error("Error updating item status:", error);
   } else {
-    await logAction('UPDATE', `Atualizou status do item #${itemId} para '${status}'`, { item_id: itemId, status });
+    await logAction('UPDATE', `Atualizou status do item #${itemId} para '${status}'`, { item_id: itemId, status, feedback });
   }
 };
 
