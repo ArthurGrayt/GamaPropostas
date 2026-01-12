@@ -142,23 +142,6 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
                             <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">Status de Aprovação</span>
                             <span className={`text-2xl font-bold ${isComplete ? 'text-emerald-600' : 'text-blue-600'}`}>{Math.round(progress)}%</span>
                         </div>
-                        {!isComplete && (
-                            <button
-                                onClick={() => {
-                                    if (window.confirm("Deseja aprovar todos os itens pendentes?")) {
-                                        proposal.itens.forEach(item => {
-                                            if (item.status !== 'APPROVED') {
-                                                handleItemAction(item, 'APPROVED');
-                                            }
-                                        });
-                                    }
-                                }}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
-                            >
-                                <CheckCircle size={18} />
-                                Aprovar Todos
-                            </button>
-                        )}
                     </div>
                     <div className="w-full h-4 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
                         <div
@@ -268,13 +251,42 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
                 </div>
 
                 {/* Footer Total */}
-                <div className="mt-8 pt-8 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <div className="mt-8 pt-8 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center mb-24">
                     <span className="text-zinc-500">Valor Total Estimado</span>
                     <span className="text-2xl font-bold text-zinc-900 dark:text-white">
                         {proposal.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </span>
                 </div>
             </main>
+
+            {/* Fixed Bottom Action Bar */}
+            {!isComplete && (
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 z-50 animate-slide-up-fade">
+                    <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                        <div className="hidden sm:block">
+                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-bold block">Total da Proposta</span>
+                            <span className="text-xl font-bold text-zinc-900 dark:text-white">
+                                {proposal.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (window.confirm("Deseja aprovar todos os itens pendentes?")) {
+                                    proposal.itens.forEach(item => {
+                                        if (item.status !== 'APPROVED') {
+                                            handleItemAction(item, 'APPROVED');
+                                        }
+                                    });
+                                }
+                            }}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                        >
+                            <CheckCircle size={24} />
+                            Aprovar Proposta Completa
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -216,6 +216,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
     const [pdfShowItemObservations, setPdfShowItemObservations] = useState(false);
 
+    // Share Modal State
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
     // Identify unique modules for the Observation tab
     // We match the module titles used in pdfGenerator manually or infer them?
     // pdfGenerator uses: EXAMES, DOCUMENTOS, eSOCIAL, TREINAMENTOS, SERVIÇOS SST
@@ -604,11 +607,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                         label="Compartilhar Proposta"
                                         variant="neutral"
                                         icon={<Share2 size={18} />}
-                                        onClick={() => {
-                                            const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
-                                            navigator.clipboard.writeText(url);
-                                            alert("Link copiado para a área de transferência:\n" + url);
-                                        }}
+                                        onClick={() => setIsShareModalOpen(true)}
                                     />
                                     <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
                                     <ActionButton
@@ -1194,6 +1193,54 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                             >
                                 Salvar Configuração
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Share Modal */}
+            {isShareModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800">
+                        <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-zinc-900 dark:text-white">Compartilhar Proposta</h3>
+                            <button onClick={() => setIsShareModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                Utilize o link abaixo para compartilhar esta proposta com seu cliente. Ele poderá visualizar, aprovar ou reprovar itens sem precisar de login.
+                            </p>
+
+                            <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 break-all text-sm font-mono text-zinc-600 dark:text-zinc-300 select-all">
+                                {`${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`}
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={() => {
+                                        const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Link copiado!");
+                                        setIsShareModalOpen(false);
+                                    }}
+                                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <Check size={18} />
+                                    Copiar
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
+                                        window.open(url, '_blank');
+                                        setIsShareModalOpen(false);
+                                    }}
+                                    className="flex-1 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <Share2 size={18} />
+                                    Abrir Guia
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
