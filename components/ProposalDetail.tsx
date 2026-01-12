@@ -143,6 +143,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [docSegObs, setDocSegObs] = useState('');
     const [isSavingDocSeg, setIsSavingDocSeg] = useState(false);
 
+    // Hover Module State (for z-index/overflow handling)
+    const [hoveredModuleId, setHoveredModuleId] = useState<number | null>(null);
+
     // Deadline Config Modal State
     const [isDeadlineModalOpen, setIsDeadlineModalOpen] = useState(false);
     const [globalDeadline, setGlobalDeadline] = useState('');
@@ -893,7 +896,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                         const isExpanded = forceExpand ? true : expandedModules[modId];
 
                         return (
-                            <div key={modId} className="space-y-4">
+                            <div
+                                key={modId}
+                                className="space-y-4"
+                                onMouseEnter={() => setHoveredModuleId(modId)}
+                                onMouseLeave={() => setHoveredModuleId(null)}
+                            >
                                 <div onClick={() => toggleModule(modId)} className="flex items-center justify-between cursor-pointer group select-none">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 rounded-lg bg-indigo-500 text-white shadow-lg shadow-indigo-500/30"><Box size={20} /></div>
@@ -902,7 +910,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                     <div className={`p-2 rounded-full bg-stone-100 dark:bg-zinc-800 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}><ChevronDown size={16} /></div>
                                 </div>
 
-                                <div className={`space-y-6 transition-all duration-500 ease-spring px-1 pb-4 ${openStatusMenu !== null || editingItem !== null ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
+                                <div className={`space-y-6 transition-all duration-500 ease-spring px-1 pb-4 ${openStatusMenu !== null || editingItem !== null || hoveredModuleId === modId ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
                                     {Object.entries(moduleData.categorias).map(([catId, data]) => {
                                         const catData = data as CategoryGroup;
                                         return (
@@ -921,7 +929,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                         return (
                                                             <GlassCard
                                                                 key={item.uiKey}
-                                                                className={`p-4 flex items-center justify-between group hover:border-blue-300/50 dark:hover:border-blue-500/30 relative transition-all ${openStatusMenu === item.uiKey || isEditing ? 'z-[50]' : 'z-10'} ${isEditing ? 'border-blue-400/80 dark:border-blue-500/70 ring-2 ring-blue-500/20' : ''}`}
+                                                                className={`p-4 flex items-center justify-between group hover:border-blue-300/50 dark:hover:border-blue-500/30 relative transition-all hover:z-[70] ${openStatusMenu === item.uiKey || isEditing ? 'z-[50]' : 'z-10'} ${isEditing ? 'border-blue-400/80 dark:border-blue-500/70 ring-2 ring-blue-500/20' : ''}`}
                                                             >
                                                                 <div className="flex-1 pr-4">
                                                                     <h4 className="font-semibold text-zinc-800 dark:text-zinc-100 mb-1.5">{item.procedimento?.nome || 'Procedimento'}</h4>
@@ -997,12 +1005,23 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                                             <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-500 transition-colors">
                                                                                 <Trash2 size={14} />
                                                                             </button>
-                                                                            <div className="relative">
+                                                                            <div className="relative group/status">
                                                                                 <button onClick={() => setOpenStatusMenu(openStatusMenu === item.uiKey ? null : item.uiKey)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors bg-white/50 dark:bg-black/50 border dark:border-white/10 ${statusInfo.color}`}>
                                                                                     <StatusIcon size={14} />
                                                                                     <span className="hidden sm:inline">{statusInfo.label}</span>
                                                                                     <MoreHorizontal size={14} className="ml-1 text-zinc-400" />
                                                                                 </button>
+
+                                                                                {item.status === 'REJECTED' && item.feedback && openStatusMenu !== item.uiKey && (
+                                                                                    <div className="absolute bottom-full right-0 mb-2 w-max max-w-[250px] p-3 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-xs rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 pointer-events-none opacity-0 group-hover/status:opacity-100 transition-all transform translate-y-2 group-hover/status:translate-y-0 z-[60] flex flex-col gap-1">
+                                                                                        <p className="font-bold text-red-500 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                                                                                            <XCircle size={10} /> Motivo da Recusa
+                                                                                        </p>
+                                                                                        <p className="leading-snug italic font-medium">"{item.feedback}"</p>
+                                                                                        <div className="absolute top-full right-6 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-zinc-200 dark:border-t-zinc-700"></div>
+                                                                                    </div>
+                                                                                )}
+
                                                                                 {openStatusMenu === item.uiKey && (
                                                                                     <div ref={statusMenuRef} className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-zinc-800 rounded-lg shadow-2xl border dark:border-white/10 z-50 animate-fade-in p-1">
                                                                                         {itemStatusKeys.map(statusKey => {
