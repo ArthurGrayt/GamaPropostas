@@ -9,6 +9,7 @@ import { EnrichedProposal, ProposalStatus } from './types';
 import { Loader2, LogOut, User, SlidersHorizontal, Sun, Moon } from 'lucide-react';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { LoginPage } from './components/LoginPage';
+import { ClientProposalView } from './components/ClientProposalView';
 
 type ViewState = 'LIST' | 'DETAIL' | 'CREATE' | 'SETTINGS' | 'CLIENTS';
 
@@ -242,6 +243,16 @@ const App: React.FC = () => {
 
 const AuthWrapper: React.FC = () => {
   const { session } = useAuth();
+
+  // Check for shared proposal link
+  const urlParams = new URLSearchParams(window.location.search);
+  const mode = urlParams.get('mode');
+  const sharedId = urlParams.get('id');
+
+  if (mode === 'shared' && sharedId) {
+    return <ClientProposalView proposalId={parseInt(sharedId)} />;
+  }
+
   return session ? <MainApp /> : <LoginPage />;
 };
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector } from './UIComponents';
-import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings } from 'lucide-react';
+import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings, Share2 } from 'lucide-react';
 import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 
@@ -599,6 +599,16 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                         variant="neutral"
                                         icon={<Settings size={18} />}
                                         onClick={handleOpenConfigModal}
+                                    />
+                                    <ActionButton
+                                        label="Compartilhar Proposta"
+                                        variant="neutral"
+                                        icon={<Share2 size={18} />}
+                                        onClick={() => {
+                                            const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
+                                            navigator.clipboard.writeText(url);
+                                            alert("Link copiado para a área de transferência:\n" + url);
+                                        }}
                                     />
                                     <ActionButton label="Arquivar Proposta" variant="neutral" icon={<Archive size={18} />} onClick={handleArchiveProposal} />
                                     <ActionButton
