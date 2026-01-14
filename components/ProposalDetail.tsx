@@ -129,11 +129,84 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
 
     const handleStatusChange = async (newStatus: ProposalStatus) => {
         if (!proposal) return;
+
+        // Intercept APPROVED status for Bulk Doc Seg
+        if (newStatus === 'APPROVED') {
+            // 1. Identify items that need DocSeg
+            const eligibleItems = items.filter(item => {
+                const isExcludedModule = item.modulo?.nome && (
+                    item.modulo.nome.toLowerCase().includes('exames') ||
+                    item.modulo.nome.toLowerCase().includes('esocial')
+                );
+                // We apply it even if already approved? Usually bulk action applies to current state
+                // If item is already APPROVED, maybe we don't re-create.
+                // Let's filter items that represent "Pending" or "Rejected" that would become approved.
+                // OR simpler: check if they have a linked doc seg? We don't track that easily on FE.
+                // Assumption: Bulk approve applies to all non-approved items OR all items.
+                // Let's target items that are NOT excluded.
+                return !isExcludedModule;
+            });
+
+            if (eligibleItems.length > 0 && proposal.unidade_id) {
+                setBulkDocSegItems(eligibleItems);
+                setDocSegPrazo(''); // Single deadline for all
+                setDocSegObs('');
+                setIsBulkDocSegModalOpen(true);
+                return;
+            }
+        }
+
         setIsUpdating(true);
         await updateProposalStatus(proposal.id, newStatus);
         setCurrentStatus(newStatus);
         onUpdate();
         setIsUpdating(false);
+    };
+
+    const handleConfirmBulkDocSeg = async () => {
+        if (bulkDocSegItems.length === 0) return;
+        if (!docSegPrazo) {
+            alert("Por favor, informe o prazo para os documentos.");
+            return;
+        }
+
+        setIsSavingDocSeg(true);
+        try {
+            // Create Doc Seg for each item
+            const creates = bulkDocSegItems.map(item => {
+                const docSegData: DocSeg = {
+                    mes: new Date().getMonth() + 1,
+                    empresa: proposal.unidade_id!, // Creating logic guarantees this is present
+                    doc: item.procedimento.id,
+                    valor: item.total || item.preco || 0,
+                    status: 'Pendente',
+                    data_recebimento: new Date().toISOString(),
+                    prazo: new Date(docSegPrazo).toISOString(),
+                    data_entrega: new Date(docSegPrazo).toISOString(),
+                    enviado: false,
+                    obs: docSegObs
+                };
+                return createDocSeg(docSegData);
+            });
+
+            await Promise.all(creates);
+
+            // Finally, update Proposal Status to APPROVED
+            // This will also cascade update item statuses to APPROVED via the API logic if implemented there,
+            // OR we might need to manually update them if the API `updateProposalStatus` doesn't do it all perfectly.
+            // Our `updateProposalStatus` DOES cascade 'APPROVED' to all items.
+            await updateProposalStatus(proposal.id, 'APPROVED');
+            setCurrentStatus('APPROVED');
+
+            setIsBulkDocSegModalOpen(false);
+            onUpdate();
+        } catch (error) {
+            console.error("Error batch creating doc seg:", error);
+            alert("Erro ao criar documentos em lote.");
+        } finally {
+            setIsSavingDocSeg(false);
+            setBulkDocSegItems([]);
+        }
     };
 
     // Doc Seg Modal State
@@ -142,6 +215,10 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [docSegPrazo, setDocSegPrazo] = useState('');
     const [docSegObs, setDocSegObs] = useState('');
     const [isSavingDocSeg, setIsSavingDocSeg] = useState(false);
+
+    // Bulk Doc Seg State
+    const [isBulkDocSegModalOpen, setIsBulkDocSegModalOpen] = useState(false);
+    const [bulkDocSegItems, setBulkDocSegItems] = useState<EnrichedItem[]>([]);
 
     // Hover Module State (for z-index/overflow handling)
     const [hoveredModuleId, setHoveredModuleId] = useState<number | null>(null);
@@ -217,12 +294,20 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
         if (newStatus === 'APPROVED') {
             const item = items.find(i => i.id === itemId);
             if (item) {
-                setDocSegItem(item);
-                setDocSegPrazo('');
-                setDocSegObs('');
-                // Default deadline to 30 days from now? Or simple empty. User requested to insert.
-                setIsDocSegModalOpen(true);
-                return;
+                // Check if module is excluded from Doc Seg
+                const isExcludedModule = item.modulo?.nome && (
+                    item.modulo.nome.toLowerCase().includes('exames') ||
+                    item.modulo.nome.toLowerCase().includes('esocial')
+                );
+
+                if (!isExcludedModule) {
+                    setDocSegItem(item);
+                    setDocSegPrazo('');
+                    setDocSegObs('');
+                    // Default deadline to 30 days from now? Or simple empty. User requested to insert.
+                    setIsDocSegModalOpen(true);
+                    return;
+                }
             }
         }
 
@@ -797,9 +882,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                                 ))
                                             }
                                             {catalog.procedimentos.length === 0 && <div className="text-center py-4 text-zinc-500 text-xs"><Loader2 className="animate-spin mx-auto mb-1" size={16} /> Carregando...</div>}
-                                            {catalog.procedimentos.length > 0 && catalog.procedimentos.filter(p => p.nome.toLowerCase().includes(newItemSearch.toLowerCase())).length === 0 && (
-                                                <div className="text-center py-4 text-zinc-400 text-xs">Nada encontrado.</div>
-                                            )}
+
                                         </div>
                                     </div>
                                 ) : (
@@ -853,7 +936,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                                             <span>Adicionar</span>
                                         </button>
                                     </div>
-                                )}
+                                )
+                                }
                             </div>
                         )}
                     </GlassCard>
@@ -1051,7 +1135,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                         );
                     })}
                 </div>
-            </div>
+            </div >
 
             {isCreatingClient && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
@@ -1226,378 +1310,480 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                     </div>
                 </div>
             )}
-            {/* Doc Seg Modal */}
-            {isDocSegModalOpen && docSegItem && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
-                        <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Gerar Documento de Segurança</h3>
-                            <button onClick={() => setIsDocSegModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                                Para aprovar o item <span className="font-bold text-zinc-800 dark:text-white">{docSegItem.procedimento.nome}</span>, é necessário gerar o documento de segurança.
-                            </p>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Prazo de Entrega</label>
-                                <div className="relative">
-                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-                                    <input
-                                        type="date"
-                                        value={docSegPrazo}
-                                        onChange={(e) => setDocSegPrazo(e.target.value)}
-                                        className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all dark:text-white"
-                                    />
-                                </div>
-                            </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Observações</label>
-                                <textarea
-                                    value={docSegObs}
-                                    onChange={(e) => setDocSegObs(e.target.value)}
-                                    placeholder="Observações adicionais..."
-                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
-                                />
-                            </div>
-                        </div>
-                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 flex-wrap">
-                            <button
-                                onClick={() => setIsDocSegModalOpen(false)}
-                                className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={() => handleConfirmDocSeg(false)}
-                                disabled={isSavingDocSeg}
-                                className="px-4 py-2 rounded-lg bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-white font-medium transition-colors disabled:opacity-50 text-sm"
-                            >
-                                Confirmar e Aprovar
-                            </button>
-                            <button
-                                onClick={() => handleConfirmDocSeg(true)}
-                                disabled={isSavingDocSeg}
-                                className="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold shadow-lg shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
-                            >
-                                {isSavingDocSeg ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                                Confirmar e ir para Gama Seg
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {/* Observation Modal */}
-            {isObservationModalOpen && observationItem && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
-                        <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Observação do Item</h3>
-                            <button onClick={() => setIsObservationModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                                Adicionar observação para <span className="font-bold text-zinc-800 dark:text-white">{observationItem.procedimento.nome}</span>.
-                            </p>
-                            <textarea
-                                value={observationText}
-                                onChange={(e) => setObservationText(e.target.value)}
-                                placeholder="Escreva sua observação aqui..."
-                                className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3">
-                            <button
-                                onClick={() => setIsObservationModalOpen(false)}
-                                className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleSaveObservation}
-                                disabled={isSavingObservation}
-                                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
-                            >
-                                {isSavingObservation ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                                Salvar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {/* PDF Config Modal */}
-            {isConfigModalOpen && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh]">
-                        <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
-                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Configuração do Relatório PDF</h3>
-                            <button onClick={() => setIsConfigModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
 
-                        {/* Tabs Header */}
-                        <div className="flex border-b border-neutral-100 dark:border-white/5 shrink-0">
-                            <button
-                                onClick={() => setConfigTab('NOMENCLATURA')}
-                                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'NOMENCLATURA' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
-                            >
-                                Nomenclatura da Empresa
-                                {configTab === 'NOMENCLATURA' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
-                            </button>
-                            <button
-                                onClick={() => setConfigTab('OBSERVACOES')}
-                                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'OBSERVACOES' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
-                            >
-                                Observações por Módulo
-                                {configTab === 'OBSERVACOES' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
-                            </button>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-                            {configTab === 'NOMENCLATURA' && (
-                                <div className="space-y-6 animate-slide-in">
-                                    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700">
-                                        <label className="flex items-center gap-3 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={pdfShowItemObservations}
-                                                onChange={(e) => setPdfShowItemObservations(e.target.checked)}
-                                                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <span className="font-medium text-zinc-700 dark:text-zinc-200">Exibir observações individuais dos itens</span>
-                                        </label>
-                                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 ml-8">
-                                            Se marcado, as observações adicionadas a cada item (clicando no ícone 'i') serão exibidas no PDF logo abaixo do nome do item.
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-2">Nomenclatura da Empresa</h4>
-                                        <label
-                                            onClick={() => setPdfCompanyNameType('NOME')}
-                                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME' ? 'border-blue-600' : 'border-zinc-300'}`}>
-                                                    {pdfCompanyNameType === 'NOME' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                                </div>
-                                                <span className="font-medium text-zinc-700 dark:text-zinc-200">Nome do Cliente</span>
-                                            </div>
-                                            <span className="text-xs text-zinc-400">{proposal.cliente.nome}</span>
-                                        </label>
-
-                                        <label
-                                            onClick={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
-                                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'border-blue-600' : 'border-zinc-300'}`}>
-                                                    {pdfCompanyNameType === 'RAZAO_SOCIAL' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Razão Social</span>
-                                                    <span className="text-[10px] text-zinc-400">
-                                                        {proposal.unidade ? '(Unidade)' : '(Cliente)'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs text-zinc-400 truncate max-w-[150px]">
-                                                {proposal.unidade?.razao_social || proposal.cliente.razao_social || 'Não informado'}
-                                            </span>
-                                        </label>
-
-                                        <label
-                                            onClick={() => setPdfCompanyNameType('NOME_FANTASIA')}
-                                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'border-blue-600' : 'border-zinc-300'}`}>
-                                                    {pdfCompanyNameType === 'NOME_FANTASIA' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Nome Fantasia</span>
-                                                    <span className="text-[10px] text-zinc-400">
-                                                        {proposal.unidade ? '(Unidade)' : '(Cliente)'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs text-zinc-400 truncate max-w-[150px]">
-                                                {proposal.unidade?.nome_fantasia || proposal.cliente.nome_fantasia || 'Não informado'}
-                                            </span>
-                                        </label>
-                                    </div>
-
-                                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/30 flex gap-3">
-                                        <FileText className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
-                                        <p className="text-sm text-amber-800 dark:text-amber-200">
-                                            Itens marcados como <span className="font-bold">Pendente</span> e <span className="font-bold">Aprovado</span> serão incluídos no PDF.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {configTab === 'OBSERVACOES' && (
-                                <div className="space-y-6 animate-slide-in">
-                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                                        Adicione observações específicas para cada módulo que serão exibidas logo abaixo da tabela de itens correspondente no PDF gerado.
-                                    </p>
-                                    <div className="space-y-4">
-                                        {availableModules.map(moduleTitle => (
-                                            <div key={moduleTitle} className="space-y-1">
-                                                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wide">{moduleTitle}</label>
-                                                <textarea
-                                                    value={pdfModuleObservations[moduleTitle] || ''}
-                                                    onChange={(e) => setPdfModuleObservations(prev => ({ ...prev, [moduleTitle]: e.target.value }))}
-                                                    placeholder={`Observação para ${moduleTitle}...`}
-                                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[80px] text-sm dark:text-white"
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 shrink-0">
-                            <button
-                                onClick={() => setIsConfigModalOpen(false)}
-                                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-                            >
-                                Salvar Configuração
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {/* Deadline Configuration Modal */}
-            {isDeadlineModalOpen && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh]">
-                        <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center shrink-0">
-                            <div>
-                                <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
-                                    <CalendarClock className="text-blue-500" size={20} />
-                                    Configurar Prazos de Entrega
-                                </h3>
-                                <p className="text-xs text-zinc-500">Defina os prazos de entrega antes de compartilhar.</p>
-                            </div>
-                            <button onClick={() => setIsDeadlineModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-b border-neutral-100 dark:border-zinc-800 shrink-0">
-                            <label className="text-xs font-bold uppercase text-zinc-500 mb-1.5 block">Aplicar Prazo Geral</label>
-                            <div className="flex gap-2">
-                                <input
-                                    type="date"
-                                    value={globalDeadline}
-                                    onChange={(e) => setGlobalDeadline(e.target.value)}
-                                    className="flex-1 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
-                                />
-                                <button
-                                    onClick={handleApplyGlobalDeadline}
-                                    className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-sm rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                                >
-                                    Aplicar a Todos
+            {/* Doc Seg Modal (Individual) */}
+            {
+                isDocSegModalOpen && docSegItem && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
+                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
+                                <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Gerar Documento de Segurança</h3>
+                                <button onClick={() => setIsDocSegModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                    <X size={20} />
                                 </button>
                             </div>
-                        </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                    Para aprovar o item <span className="font-bold text-zinc-800 dark:text-white">{docSegItem.procedimento.nome}</span>, é necessário gerar o documento de segurança.
+                                </p>
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                            {proposal.itens.map((item) => (
-                                <div key={item.uiKey} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800 rounded-xl">
-                                    <div className="flex-1 pr-4">
-                                        <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200">{item.procedimento.nome}</p>
-                                        <p className="text-xs text-zinc-500">{item.modulo.nome}</p>
-                                    </div>
-                                    <div className="w-40">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Prazo de Entrega</label>
+                                    <div className="relative">
+                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
                                         <input
                                             type="date"
-                                            value={itemDeadlines[item.id] || ''}
-                                            onChange={(e) => setItemDeadlines(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                            className={`w-full p-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${!itemDeadlines[item.id] ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900'}`}
+                                            value={docSegPrazo}
+                                            onChange={(e) => setDocSegPrazo(e.target.value)}
+                                            className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all dark:text-white"
                                         />
                                     </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        <div className="p-4 border-t border-neutral-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex justify-end gap-3 shrink-0">
-                            <button
-                                onClick={() => setIsDeadlineModalOpen(false)}
-                                className="px-6 py-2.5 rounded-xl text-zinc-600 dark:text-zinc-400 font-bold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleConfirmDeadlines}
-                                disabled={isSavingDeadlines}
-                                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
-                            >
-                                {isSavingDeadlines ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
-                                Confirmar e Compartilhar
-                            </button>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Observações</label>
+                                    <textarea
+                                        value={docSegObs}
+                                        onChange={(e) => setDocSegObs(e.target.value)}
+                                        placeholder="Observações adicionais..."
+                                        className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
+                                    />
+                                </div>
+                            </div>
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 flex-wrap">
+                                <button
+                                    onClick={() => setIsDocSegModalOpen(false)}
+                                    className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => handleConfirmDocSeg(false)}
+                                    disabled={isSavingDocSeg}
+                                    className="px-4 py-2 rounded-lg bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-white font-medium transition-colors disabled:opacity-50 text-sm"
+                                >
+                                    Confirmar e Aprovar
+                                </button>
+                                <button
+                                    onClick={() => handleConfirmDocSeg(true)}
+                                    disabled={isSavingDocSeg}
+                                    className="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold shadow-lg shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
+                                >
+                                    {isSavingDocSeg ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                    Confirmar e ir para Gama Seg
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+            {/* Observation Modal */}
+            {
+                isObservationModalOpen && observationItem && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
+                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
+                                <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Observação do Item</h3>
+                                <button onClick={() => setIsObservationModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                    Adicionar observação para <span className="font-bold text-zinc-800 dark:text-white">{observationItem.procedimento.nome}</span>.
+                                </p>
+                                <textarea
+                                    value={observationText}
+                                    onChange={(e) => setObservationText(e.target.value)}
+                                    placeholder="Escreva sua observação aqui..."
+                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setIsObservationModalOpen(false)}
+                                    className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleSaveObservation}
+                                    disabled={isSavingObservation}
+                                    className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
+                                >
+                                    {isSavingObservation ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+            {/* PDF Config Modal */}
+            {
+                isConfigModalOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh]">
+                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
+                                <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Configuração do Relatório PDF</h3>
+                                <button onClick={() => setIsConfigModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Tabs Header */}
+                            <div className="flex border-b border-neutral-100 dark:border-white/5 shrink-0">
+                                <button
+                                    onClick={() => setConfigTab('NOMENCLATURA')}
+                                    className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'NOMENCLATURA' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
+                                >
+                                    Nomenclatura da Empresa
+                                    {configTab === 'NOMENCLATURA' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
+                                </button>
+                                <button
+                                    onClick={() => setConfigTab('OBSERVACOES')}
+                                    className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'OBSERVACOES' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
+                                >
+                                    Observações por Módulo
+                                    {configTab === 'OBSERVACOES' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                                {configTab === 'NOMENCLATURA' && (
+                                    <div className="space-y-6 animate-slide-in">
+                                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700">
+                                            <label className="flex items-center gap-3 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={pdfShowItemObservations}
+                                                    onChange={(e) => setPdfShowItemObservations(e.target.checked)}
+                                                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span className="font-medium text-zinc-700 dark:text-zinc-200">Exibir observações individuais dos itens</span>
+                                            </label>
+                                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 ml-8">
+                                                Se marcado, as observações adicionadas a cada item (clicando no ícone 'i') serão exibidas no PDF logo abaixo do nome do item.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-2">Nomenclatura da Empresa</h4>
+                                            <label
+                                                onClick={() => setPdfCompanyNameType('NOME')}
+                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                        {pdfCompanyNameType === 'NOME' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                                    </div>
+                                                    <span className="font-medium text-zinc-700 dark:text-zinc-200">Nome do Cliente</span>
+                                                </div>
+                                                <span className="text-xs text-zinc-400">{proposal.cliente.nome}</span>
+                                            </label>
+
+                                            <label
+                                                onClick={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
+                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                        {pdfCompanyNameType === 'RAZAO_SOCIAL' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Razão Social</span>
+                                                        <span className="text-[10px] text-zinc-400">
+                                                            {proposal.unidade ? '(Unidade)' : '(Cliente)'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs text-zinc-400 truncate max-w-[150px]">
+                                                    {proposal.unidade?.razao_social || proposal.cliente.razao_social || 'Não informado'}
+                                                </span>
+                                            </label>
+
+                                            <label
+                                                onClick={() => setPdfCompanyNameType('NOME_FANTASIA')}
+                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'border-blue-600' : 'border-zinc-300'}`}>
+                                                        {pdfCompanyNameType === 'NOME_FANTASIA' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium text-zinc-700 dark:text-zinc-200 leading-tight">Nome Fantasia</span>
+                                                        <span className="text-[10px] text-zinc-400">
+                                                            {proposal.unidade ? '(Unidade)' : '(Cliente)'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs text-zinc-400 truncate max-w-[150px]">
+                                                    {proposal.unidade?.nome_fantasia || proposal.cliente.nome_fantasia || 'Não informado'}
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/30 flex gap-3">
+                                            <FileText className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
+                                            <p className="text-sm text-amber-800 dark:text-amber-200">
+                                                Itens marcados como <span className="font-bold">Pendente</span> e <span className="font-bold">Aprovado</span> serão incluídos no PDF.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {configTab === 'OBSERVACOES' && (
+                                    <div className="space-y-6 animate-slide-in">
+                                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                                            Adicione observações específicas para cada módulo que serão exibidas logo abaixo da tabela de itens correspondente no PDF gerado.
+                                        </p>
+                                        <div className="space-y-4">
+                                            {availableModules.map(moduleTitle => (
+                                                <div key={moduleTitle} className="space-y-1">
+                                                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wide">{moduleTitle}</label>
+                                                    <textarea
+                                                        value={pdfModuleObservations[moduleTitle] || ''}
+                                                        onChange={(e) => setPdfModuleObservations(prev => ({ ...prev, [moduleTitle]: e.target.value }))}
+                                                        placeholder={`Observação para ${moduleTitle}...`}
+                                                        className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[80px] text-sm dark:text-white"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 shrink-0">
+                                <button
+                                    onClick={() => setIsConfigModalOpen(false)}
+                                    className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                                >
+                                    Salvar Configuração
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+            {/* Deadline Configuration Modal */}
+            {
+                isDeadlineModalOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh]">
+                            <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center shrink-0">
+                                <div>
+                                    <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
+                                        <CalendarClock className="text-blue-500" size={20} />
+                                        Configurar Prazos de Entrega
+                                    </h3>
+                                    <p className="text-xs text-zinc-500">Defina os prazos de entrega antes de compartilhar.</p>
+                                </div>
+                                <button onClick={() => setIsDeadlineModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-b border-neutral-100 dark:border-zinc-800 shrink-0">
+                                <label className="text-xs font-bold uppercase text-zinc-500 mb-1.5 block">Aplicar Prazo Geral</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="date"
+                                        value={globalDeadline}
+                                        onChange={(e) => setGlobalDeadline(e.target.value)}
+                                        className="flex-1 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
+                                    />
+                                    <button
+                                        onClick={handleApplyGlobalDeadline}
+                                        className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-sm rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                    >
+                                        Aplicar a Todos
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                {proposal.itens.map((item) => (
+                                    <div key={item.uiKey} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800 rounded-xl">
+                                        <div className="flex-1 pr-4">
+                                            <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200">{item.procedimento.nome}</p>
+                                            <p className="text-xs text-zinc-500">{item.modulo.nome}</p>
+                                        </div>
+                                        <div className="w-40">
+                                            <input
+                                                type="date"
+                                                value={itemDeadlines[item.id] || ''}
+                                                onChange={(e) => setItemDeadlines(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                className={`w-full p-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${!itemDeadlines[item.id] ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900'}`}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="p-4 border-t border-neutral-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex justify-end gap-3 shrink-0">
+                                <button
+                                    onClick={() => setIsDeadlineModalOpen(false)}
+                                    className="px-6 py-2.5 rounded-xl text-zinc-600 dark:text-zinc-400 font-bold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleConfirmDeadlines}
+                                    disabled={isSavingDeadlines}
+                                    className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {isSavingDeadlines ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                    Confirmar e Compartilhar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Share Modal */}
-            {isShareModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800">
-                        <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-zinc-900 dark:text-white">Compartilhar Proposta</h3>
-                            <button onClick={() => setIsShareModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                                Utilize o link abaixo para compartilhar esta proposta com seu cliente. Ele poderá visualizar, aprovar ou reprovar itens sem precisar de login.
-                            </p>
+            {
+                isShareModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800">
+                            <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center">
+                                <h3 className="font-bold text-lg text-zinc-900 dark:text-white">Compartilhar Proposta</h3>
+                                <button onClick={() => setIsShareModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                    Utilize o link abaixo para compartilhar esta proposta com seu cliente. Ele poderá visualizar, aprovar ou reprovar itens sem precisar de login.
+                                </p>
 
-                            <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 break-all text-sm font-mono text-zinc-600 dark:text-zinc-300 select-all">
-                                {`${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`}
+                                <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 break-all text-sm font-mono text-zinc-600 dark:text-zinc-300 select-all">
+                                    {`${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`}
+                                </div>
+
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        onClick={() => {
+                                            const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
+                                            navigator.clipboard.writeText(url);
+                                            alert("Link copiado!");
+                                            setIsShareModalOpen(false);
+                                        }}
+                                        className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <Check size={18} />
+                                        Copiar
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
+                                            window.open(url, '_blank');
+                                            setIsShareModalOpen(false);
+                                        }}
+                                        className="flex-1 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <Share2 size={18} />
+                                        Abrir Guia
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                )
+            }
+            {
+                isBulkDocSegModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+                            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50">
+                                <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
+                                    <Layers size={20} className="text-blue-500" />
+                                    Aprovar Proposta
+                                </h3>
+                                <button onClick={() => setIsBulkDocSegModalOpen(false)} className="text-zinc-500 hover:text-red-500 transition-colors">
+                                    <X size={20} />
+                                </button>
                             </div>
 
-                            <div className="flex gap-3 pt-2">
+                            <div className="p-6 space-y-4">
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm border border-blue-200 dark:border-blue-800/50">
+                                    <div className="font-semibold flex items-center gap-2 mb-1">
+                                        <Info size={16} />
+                                        Atenção
+                                    </div>
+                                    <p>
+                                        Existem {bulkDocSegItems.length} itens elegíveis para geração de documentos (SST/Documentos).
+                                        Defina o prazo abaixo para gerar os registros automaticamente.
+                                    </p>
+                                    <p className="mt-2 text-xs opacity-75">
+                                        Itens de Exames e eSocial serão apenas aprovados, sem gerar documentos.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-2">
+                                            <CalendarClock size={16} />
+                                            Prazo de Entrega (Geral)
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={docSegPrazo}
+                                            onChange={(e) => setDocSegPrazo(e.target.value)}
+                                            className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-2">
+                                            <FileText size={16} />
+                                            Observações (Opcional)
+                                        </label>
+                                        <textarea
+                                            value={docSegObs}
+                                            onChange={(e) => setDocSegObs(e.target.value)}
+                                            rows={3}
+                                            className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
+                                            placeholder="Observações internas..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
                                 <button
-                                    onClick={() => {
-                                        const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
-                                        navigator.clipboard.writeText(url);
-                                        alert("Link copiado!");
-                                        setIsShareModalOpen(false);
-                                    }}
-                                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    onClick={() => setIsBulkDocSegModalOpen(false)}
+                                    className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
                                 >
-                                    <Check size={18} />
-                                    Copiar
+                                    Cancelar
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        const url = `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`;
-                                        window.open(url, '_blank');
-                                        setIsShareModalOpen(false);
-                                    }}
-                                    className="flex-1 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    onClick={handleConfirmBulkDocSeg}
+                                    disabled={isSavingDocSeg}
+                                    className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg shadow-blue-500/20 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:translate-y-0 flex items-center gap-2"
                                 >
-                                    <Share2 size={18} />
-                                    Abrir Guia
+                                    {isSavingDocSeg ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Processando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={16} />
+                                            Aprovar Tudo e Gerar Docs
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
