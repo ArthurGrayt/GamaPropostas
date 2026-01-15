@@ -28,7 +28,10 @@ type SelectedItemState = {
   quantity: number;
   priceTier: PriceTierKey;
   manualPrice?: number;
+  addedAt?: number; // Timestamp for sorting
 };
+
+type CartSortOrder = 'RECENT' | 'AZ' | 'ZA';
 
 type SummaryItem = {
   procedimento: Procedimento;
@@ -36,6 +39,7 @@ type SummaryItem = {
   priceTier: PriceTierKey;
   unitPrice: number;
   manualPrice?: number;
+  addedAt?: number;
 };
 
 
@@ -83,6 +87,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [isSavingNewProcedure, setIsSavingNewProcedure] = useState(false);
 
   const [cartActiveTab, setCartActiveTab] = useState<'itens' | 'prazos'>('itens');
+  const [cartSortOrder, setCartSortOrder] = useState<CartSortOrder>('RECENT');
 
   useEffect(() => {
     const load = async () => {
@@ -237,7 +242,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   }, [catalog, activeModuloId, activeCategoriaId, searchQuery]);
 
   const summaryItems = useMemo((): SummaryItem[] => {
-    return Object.keys(selectedItemsMap).map((procIdStr): SummaryItem | null => {
+    const items = Object.keys(selectedItemsMap).map((procIdStr): SummaryItem | null => {
       const procId = parseInt(procIdStr, 10);
       const state = selectedItemsMap[procId];
       const procedimento = catalog.procedimentos.find(p => p.id === procId);
@@ -251,9 +256,29 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         priceTier: state.priceTier,
         unitPrice,
         manualPrice: state.manualPrice,
+        addedAt: state.addedAt || 0 // Internal use for sorting
       };
     }).filter((i): i is SummaryItem => i !== null);
-  }, [selectedItemsMap, catalog.procedimentos]);
+
+    // Apply Sorting
+    return items.sort((a, b) => {
+      if (cartSortOrder === 'AZ') {
+        return a.procedimento.nome.localeCompare(b.procedimento.nome);
+      } else if (cartSortOrder === 'ZA') {
+        return b.procedimento.nome.localeCompare(a.procedimento.nome);
+      } else {
+        // RECENT (Default) - Newest first (descending addedAt)
+        // If addedAt is missing (0), it goes to the bottom
+        // If keys are numbers, they might be sequential? But we use addedAt.
+        // Fallback to ID if addedAt is equal/missing to keep stability?
+        // Actually, if addedAt is 0 (legacy), user wants "Selection Order". 
+        // If we didn't track it before, we can't recover. But new items will have it.
+        // Let's sort: Higher addedAt comes first.
+        return (b.addedAt || 0) - (a.addedAt || 0);
+      }
+    });
+
+  }, [selectedItemsMap, catalog.procedimentos, cartSortOrder]);
 
   const totalValue = useMemo(() => summaryItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0), [summaryItems]);
 
@@ -268,7 +293,11 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       if (newState[procId]) {
         newState[procId] = { ...newState[procId], quantity: newState[procId].quantity + 1 };
       } else {
-        newState[procId] = { quantity: 1, priceTier: activeClientModality };
+        newState[procId] = {
+          quantity: 1,
+          priceTier: activeClientModality,
+          addedAt: Date.now() // Track when it was selected
+        };
       }
       return newState;
     });
@@ -673,7 +702,19 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="space-y-3">
                 <div className="flex justify-between items-center px-1 mb-2">
-                  <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Itens ({summaryItems.length})</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Itens ({summaryItems.length})</span>
+                    <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+                    <select
+                      value={cartSortOrder}
+                      onChange={(e) => setCartSortOrder(e.target.value as CartSortOrder)}
+                      className="text-xs bg-transparent border-none outline-none text-zinc-500 font-medium cursor-pointer hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                    >
+                      <option value="RECENT">Mais Recentes</option>
+                      <option value="AZ">A-Z</option>
+                      <option value="ZA">Z-A</option>
+                    </select>
+                  </div>
                   <div className="relative">
                     <button
                       onClick={() => setOpenGlobalPriceMenu(!openGlobalPriceMenu)}
