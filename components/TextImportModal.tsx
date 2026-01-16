@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Search, Check, AlertCircle, Plus, Minus, ArrowRight, FileText, ListChecks } from 'lucide-react';
+import { X, Search, Check, AlertCircle, Plus, Minus, ArrowRight, FileText, ListChecks, Square, CheckSquare } from 'lucide-react';
 import { CatalogContext } from '../services/mockData';
 import { Procedimento } from '../types';
 
@@ -16,7 +16,8 @@ interface DetectedItem {
     quantity: number;
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
     matchReason: string;
-    score: number; // NEW: Added score for sorting
+    score: number;
+    selected: boolean; // NEW: Track selection state
 }
 
 export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, catalog }) => {
@@ -30,55 +31,43 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
     const analyzeText = () => {
         if (!inputText.trim()) return;
         setIsAnalyzing(true);
-        console.log("=== INICIANDO ANÁLISE DE TEXTO (v6 - Filtered & Sorted) ===");
+        console.log("=== INICIANDO ANÁLISE DE TEXTO (v7 - Selection UI) ===");
 
         setTimeout(() => {
             const items: DetectedItem[] = [];
             const usedProcedureIds = new Set<number>();
+            const usedNames = new Set<string>();
 
             // 1. Advanced Normalization
             const normalize = (str: string) => str.toLowerCase()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-                .replace(/[^a-z0-9\s]/gi, ' '); // Replace special chars with space
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9\s]/gi, ' ');
 
-            // Levenshtein Distance Implementation
             const levenshtein = (a: string, b: string): number => {
                 const matrix = [];
                 for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
                 for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
-
                 for (let i = 1; i <= b.length; i++) {
                     for (let j = 1; j <= a.length; j++) {
                         if (b.charAt(i - 1) == a.charAt(j - 1)) {
                             matrix[i][j] = matrix[i - 1][j - 1];
                         } else {
-                            matrix[i][j] = Math.min(
-                                matrix[i - 1][j - 1] + 1, // substitution
-                                Math.min(
-                                    matrix[i][j - 1] + 1, // insertion
-                                    matrix[i - 1][j] + 1 // deletion
-                                )
-                            );
+                            matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
                         }
                     }
                 }
                 return matrix[b.length][a.length];
             };
 
-            // Subsequence Check: Returns true if ALL characters of 'needle' appear in 'haystack' IN ORDER
             const isSubsequence = (needle: string, haystack: string): boolean => {
-                let i = 0;
-                let j = 0;
+                let i = 0, j = 0;
                 while (i < needle.length && j < haystack.length) {
-                    if (needle[i] === haystack[j]) {
-                        i++;
-                    }
+                    if (needle[i] === haystack[j]) i++;
                     j++;
                 }
                 return i === needle.length;
             };
 
-            // Common Acronym Map
             const acronymMap: Record<string, string[]> = {
                 'pgr': ['programa de gerenciamento de riscos'],
                 'pcmso': ['programa de controle medico de saude ocupacional'],
@@ -91,34 +80,20 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
 
             const cleanText = normalize(inputText);
             const rawTokens = cleanText.split(/\s+/).filter(t => t.length > 0);
-
-            // --- GENERATE BIGRAMS (for "heMo grAmaAaa" -> "hemogramaaaa") ---
             const searchTokens = [...rawTokens];
             for (let i = 0; i < rawTokens.length - 1; i++) {
                 const bigram = rawTokens[i] + rawTokens[i + 1];
-                if (bigram.length > 3) {
-                    searchTokens.push(bigram);
-                }
+                if (bigram.length > 3) searchTokens.push(bigram);
             }
-            console.log("Tokens de Busca (Unigrams + Bigrams):", searchTokens);
 
-            // Expand with Acronyms
             const finalSearchTokens = [...searchTokens];
             Object.keys(acronymMap).forEach(acronym => {
-                const found = searchTokens.some(t => {
-                    return levenshtein(t, acronym) <= 1 || (t.length < acronym.length * 3 && isSubsequence(acronym, t));
-                });
-
+                const found = searchTokens.some(t => levenshtein(t, acronym) <= 1 || (t.length < acronym.length * 3 && isSubsequence(acronym, t)));
                 if (found) {
-                    const expansions = acronymMap[acronym];
-                    expansions.forEach(exp => {
-                        finalSearchTokens.push(...normalize(exp).split(/\s+/));
-                    });
+                    acronymMap[acronym].forEach(exp => finalSearchTokens.push(...normalize(exp).split(/\s+/)));
                     finalSearchTokens.push(acronym);
                 }
             });
-
-            console.log("Tokens Finais de Busca:", finalSearchTokens);
 
             const checkMatch = (proc: Procedimento): { matched: boolean; confidence: 'HIGH' | 'MEDIUM' | 'LOW'; reason: string; score: number } => {
                 if (!proc.nome || !proc.nome.trim()) return { matched: false, confidence: 'LOW', reason: 'Nome inválido', score: 0 };
@@ -137,14 +112,7 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
                     for (const token of finalSearchTokens) {
                         let threshold = keyword.length < 5 ? 1 : Math.floor(keyword.length * 0.4);
                         threshold = Math.min(threshold, 5);
-
-                        const dist = levenshtein(token, keyword);
-                        if (dist <= threshold) {
-                            found = true;
-                            break;
-                        }
-
-                        if (keyword.length > 4 && token.length > keyword.length && isSubsequence(keyword, token)) {
+                        if (levenshtein(token, keyword) <= threshold || (keyword.length > 4 && token.length > keyword.length && isSubsequence(keyword, token))) {
                             found = true;
                             break;
                         }
@@ -156,57 +124,40 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
                 });
 
                 const matchRatio = matchedKeywords / procKeywords.length;
+                if (matchRatio >= 0.8) return { matched: true, confidence: matchRatio === 1 ? 'HIGH' : 'MEDIUM', reason: 'Proximidade semântica detectada', score: matchRatio };
+                if (matchedKeywords > 0 && maxKeywordLength > 6) return { matched: true, confidence: 'MEDIUM', reason: 'Palavra-chave específica identificada', score: procKeywords.length > 1 ? 0.6 : matchRatio };
+                if (matchRatio >= 0.5) return { matched: true, confidence: 'LOW', reason: 'Correspondência parcial', score: matchRatio };
 
-                if (matchRatio >= 0.8) {
-                    return { matched: true, confidence: matchRatio === 1 ? 'HIGH' : 'MEDIUM', reason: 'Proximidade semântica detectada', score: matchRatio };
-                }
-
-                if (matchedKeywords > 0 && maxKeywordLength > 6) {
-                    // High weight for partial match of specific long word
-                    return { matched: true, confidence: 'MEDIUM', reason: 'Palavra-chave específica identificada', score: procKeywords.length > 1 ? 0.6 : matchRatio };
-                }
-
-                // --- RELAXED MATCH (FILTER LATER) ---
-                if (matchRatio >= 0.5) {
-                    return { matched: true, confidence: 'LOW', reason: 'Correspondência parcial', score: matchRatio };
-                }
-
-                // Check Acronym/Alias Direct Match
                 const isAcronymLike = normProcName.length < 8 && !normProcName.includes(' ');
                 if (isAcronymLike) {
-                    const found = finalSearchTokens.some(t => isSubsequence(normProcName, t) && t.length < normProcName.length * 4);
-                    if (found) {
+                    if (finalSearchTokens.some(t => isSubsequence(normProcName, t) && t.length < normProcName.length * 4)) {
                         return { matched: true, confidence: 'HIGH', reason: 'Sigla detectada', score: 1.0 };
                     }
                 }
-
                 return { matched: false, confidence: 'LOW', reason: '', score: 0 };
             };
 
             catalog.procedimentos.forEach(proc => {
-                if (usedProcedureIds.has(proc.id)) return;
+                const procNormName = normalize(proc.nome || '');
+                if (usedProcedureIds.has(proc.id) || usedNames.has(procNormName)) return;
+
                 const match = checkMatch(proc);
-                if (match.matched && match.score >= 0.5) { // FILTER ONLY >= 50%
+                if (match.matched && match.score >= 0.5) {
                     items.push({
                         procedure: proc,
                         quantity: 1,
                         confidence: match.confidence,
                         matchReason: match.reason,
-                        score: match.score
+                        score: match.score,
+                        selected: true // Default to selected
                     });
                     usedProcedureIds.add(proc.id);
+                    usedNames.add(procNormName);
                 }
             });
 
-            // SORT: Score Descending, then Alphabetical Ascending
-            items.sort((a, b) => {
-                if (b.score !== a.score) {
-                    return b.score - a.score; // Higher score first
-                }
-                return a.procedure.nome.localeCompare(b.procedure.nome); // Alphabetical A-Z
-            });
+            items.sort((a, b) => (b.score - a.score) || a.procedure.nome.localeCompare(b.procedure.nome));
 
-            console.log("Itens Finais Detectados (Sorted):", items);
             setDetectedItems(items);
             setStep('REVIEW');
             setIsAnalyzing(false);
@@ -214,7 +165,9 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
     };
 
     const handleConfirm = () => {
-        onConfirm(detectedItems.map(i => ({ procedureId: i.procedure.id, quantity: i.quantity })));
+        // Filter only selected items
+        const selectedOnly = detectedItems.filter(i => i.selected);
+        onConfirm(selectedOnly.map(i => ({ procedureId: i.procedure.id, quantity: i.quantity })));
         handleClose();
     };
 
@@ -225,9 +178,9 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
         onClose();
     };
 
-    const removeItem = (index: number) => {
+    const toggleItemSelection = (index: number) => {
         const newItems = [...detectedItems];
-        newItems.splice(index, 1);
+        newItems[index] = { ...newItems[index], selected: !newItems[index].selected };
         setDetectedItems(newItems);
     };
 
@@ -239,15 +192,12 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
         setDetectedItems(newItems);
     };
 
+    const selectedCount = detectedItems.filter(i => i.selected).length;
+
     return createPortal(
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-                onClick={handleClose}
-            ></div>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={handleClose}></div>
 
-            {/* Modal Content */}
             <div className={`
                 bg-white dark:bg-zinc-900 w-full 
                 ${step === 'INPUT' ? 'max-w-2xl' : 'max-w-6xl'} 
@@ -265,7 +215,7 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
                         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                             {step === 'INPUT'
                                 ? 'Cole o texto da solicitação para detecção automática.'
-                                : 'Compare o texto original com os itens identificados (Ordenado por Relevância).'}
+                                : `Selecione os procedimentos que deseja adicionar (${selectedCount} selecionados).`}
                         </p>
                     </div>
                     <button onClick={handleClose} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
@@ -307,6 +257,12 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
                                         <Check size={16} className="text-green-500" />
                                         <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Itens Encontrados ({detectedItems.length})</span>
                                     </div>
+                                    <button
+                                        onClick={() => setDetectedItems(detectedItems.map(i => ({ ...i, selected: !detectedItems.every(x => x.selected) })))}
+                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-500 uppercase tracking-tight"
+                                    >
+                                        {detectedItems.every(i => i.selected) ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                                    </button>
                                 </div>
 
                                 <div className="flex-1 p-6 overflow-y-auto scrollbar-thin">
@@ -314,48 +270,48 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
                                         <div className="text-center py-12 text-zinc-400">
                                             <AlertCircle size={48} className="mx-auto mb-4 opacity-50" />
                                             <p className="text-lg font-medium">Nenhum procedimento identificado.</p>
-                                            <p className="text-sm mt-2">Tente reescrever ou buscar manualmente.</p>
                                         </div>
                                     ) : (
                                         <div className="grid gap-3">
                                             {detectedItems.map((item, idx) => (
-                                                <div key={item.procedure.id} className="flex items-start gap-3 p-2.5 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-lg hover:border-blue-300 dark:hover:border-blue-700 transition-colors group shadow-sm">
-
-                                                    {/* Status Icon */}
-                                                    <div className={`p-1.5 rounded-md mt-0.5 ${item.confidence === 'HIGH' ? 'bg-green-100 text-green-600 dark:bg-green-900/30' : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30'}`}>
-                                                        {item.confidence === 'HIGH' ? <Check size={14} /> : <AlertCircle size={14} />}
+                                                <div
+                                                    key={item.procedure.id}
+                                                    onClick={() => toggleItemSelection(idx)}
+                                                    className={`
+                                                        flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group relative
+                                                        ${item.selected
+                                                            ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+                                                            : 'bg-white dark:bg-zinc-800 border-zinc-100 dark:border-zinc-700 opacity-60 grayscale-[0.5]'}
+                                                    `}
+                                                >
+                                                    {/* Custom Checkbox */}
+                                                    <div className={`mt-0.5 transition-colors ${item.selected ? 'text-blue-600' : 'text-zinc-300 dark:text-zinc-600'}`}>
+                                                        {item.selected ? <CheckSquare size={20} /> : <Square size={20} />}
                                                     </div>
 
                                                     {/* Details */}
                                                     <div className="flex-1 min-w-0">
-                                                        <h4 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-snug break-words">{item.procedure.nome}</h4>
+                                                        <h4 className={`text-sm font-semibold leading-snug break-words ${item.selected ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500'}`}>
+                                                            {item.procedure.nome}
+                                                        </h4>
                                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                                                            <span className="bg-zinc-100 dark:bg-zinc-700/50 px-1.5 py-0.5 rounded text-[10px] items-center font-mono text-zinc-600 dark:text-zinc-400">
-                                                                {(item.procedure.preco_avulso ?? item.procedure.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                            <span className="bg-zinc-100 dark:bg-zinc-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
+                                                                {(item.procedure.preco_avulso ?? item.procedure.preco ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                             </span>
-                                                            <span className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">
+                                                            <span className={`text-[10px] font-medium ${item.selected ? 'text-blue-500' : 'text-zinc-400'}`}>
                                                                 {Math.round(item.score * 100)}% - {item.matchReason}
                                                             </span>
-                                                            {/* DEBUG SCORE - Optional, remove later */}
-                                                            {/* <span className="text-[10px] text-zinc-400">Score: {item.score.toFixed(2)}</span> */}
                                                         </div>
                                                     </div>
 
-                                                    {/* Controls */}
-                                                    <div className="flex items-center gap-2 self-center">
-                                                        <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 rounded-md p-0.5 shadow-inner">
-                                                            <button onClick={() => updateQuantity(idx, -1)} className="p-1 hover:bg-white dark:hover:bg-zinc-700 rounded shadow-sm transition-all"><Minus size={12} /></button>
-                                                            <span className="w-6 text-center text-xs font-bold font-mono">{item.quantity}</span>
-                                                            <button onClick={() => updateQuantity(idx, 1)} className="p-1 hover:bg-white dark:hover:bg-zinc-700 rounded shadow-sm transition-all"><Plus size={12} /></button>
+                                                    {/* Quantity Controls (Only if selected) */}
+                                                    {item.selected && (
+                                                        <div className="flex items-center gap-2 self-center bg-white dark:bg-zinc-900 rounded-lg p-0.5 shadow-sm border border-zinc-100 dark:border-zinc-800" onClick={e => e.stopPropagation()}>
+                                                            <button onClick={() => updateQuantity(idx, -1)} className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded transition-all text-zinc-500"><Minus size={12} /></button>
+                                                            <span className="w-6 text-center text-xs font-bold font-mono text-zinc-800 dark:text-zinc-200">{item.quantity}</span>
+                                                            <button onClick={() => updateQuantity(idx, 1)} className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded transition-all text-zinc-500"><Plus size={12} /></button>
                                                         </div>
-                                                        <button
-                                                            onClick={() => removeItem(idx)}
-                                                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                                                            title="Remover item"
-                                                        >
-                                                            <X size={14} />
-                                                        </button>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -378,18 +334,15 @@ export const TextImportModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, c
                         </button>
                     ) : (
                         <>
-                            <button
-                                onClick={() => setStep('INPUT')}
-                                className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 px-4 py-2 font-medium transition-colors"
-                            >
+                            <button onClick={() => setStep('INPUT')} className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 px-4 py-2 font-medium transition-colors">
                                 Voltar e Editar
                             </button>
                             <button
                                 onClick={handleConfirm}
-                                disabled={detectedItems.length === 0}
+                                disabled={selectedCount === 0}
                                 className="bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-green-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95"
                             >
-                                Confirmar e Adicionar <ArrowRight size={18} />
+                                Adicionar {selectedCount} {selectedCount === 1 ? 'Item' : 'Itens'} <ArrowRight size={18} />
                             </button>
                         </>
                     )}
