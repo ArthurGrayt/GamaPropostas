@@ -10,6 +10,28 @@ interface Props {
     proposal: EnrichedProposal;
     onBack: () => void;
     onUpdate: () => void;
+    pdfTexts: {
+        intro: string;
+        footer: string;
+        headerTitle: string;
+        proposalPrefix: string;
+        tableHeaders: { col1: string; col2: string; col3: string };
+        observationLabel: string;
+        whoWeAreTitle?: string;
+        whoWeAreText?: string;
+        ourTeamTitle?: string;
+        teamCol1Title?: string;
+        teamCol1Text?: string;
+        teamCol2Title?: string;
+        teamCol2Text?: string;
+        whyChooseTitle?: string;
+        whyChooseText?: string;
+        introExames?: string;
+        introDocumentos?: string;
+        introEsocial?: string;
+        introTreinamentos?: string;
+        introServicosSST?: string;
+    };
 }
 
 type PriceTierKey = 'preco_avulso' | 'preco_particular' | 'preco_parceiro' | 'preco_clientegama' | 'preco_premium';
@@ -42,7 +64,7 @@ type ModuleGroup = {
 type GroupedData = Record<number, ModuleGroup>;
 type ItemStatusFilter = 'ALL' | ItemStatus;
 
-export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) => {
+export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pdfTexts }) => {
     const [items, setItems] = useState<EnrichedItem[]>(proposal?.itens || []);
     const [currentStatus, setCurrentStatus] = useState<ProposalStatus>(proposal?.status || 'PENDING');
     const [isUpdating, setIsUpdating] = useState(false);
@@ -366,7 +388,10 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
     const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES'>('NOMENCLATURA');
     const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
     const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
+
     const [pdfShowItemObservations, setPdfShowItemObservations] = useState(false);
+
+
 
     // Share Modal State
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -403,7 +428,29 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
             await generateProposalPdf(proposal, {
                 companyNameType: pdfCompanyNameType,
                 moduleObservations: pdfModuleObservations,
-                showItemObservations: pdfShowItemObservations
+                showItemObservations: pdfShowItemObservations,
+                customIntro: pdfTexts.intro,
+                customFooter: pdfTexts.footer || undefined,
+                customHeaderTitle: pdfTexts.headerTitle,
+                customProposalPrefix: pdfTexts.proposalPrefix,
+                customTableHeaders: pdfTexts.tableHeaders,
+                customObservationLabel: pdfTexts.observationLabel,
+                // Institutional
+                whoWeAreTitle: pdfTexts.whoWeAreTitle,
+                whoWeAreText: pdfTexts.whoWeAreText,
+                ourTeamTitle: pdfTexts.ourTeamTitle,
+                teamCol1Title: pdfTexts.teamCol1Title,
+                teamCol1Text: pdfTexts.teamCol1Text,
+                teamCol2Title: pdfTexts.teamCol2Title,
+                teamCol2Text: pdfTexts.teamCol2Text,
+                whyChooseTitle: pdfTexts.whyChooseTitle,
+                whyChooseText: pdfTexts.whyChooseText,
+                // Module Intros
+                introExames: pdfTexts.introExames,
+                introDocumentos: pdfTexts.introDocumentos,
+                introEsocial: pdfTexts.introEsocial,
+                introTreinamentos: pdfTexts.introTreinamentos,
+                introServicosSST: pdfTexts.introServicosSST
             });
         } catch (error) {
             console.error("PDF Generation Error: ", error);
@@ -1784,6 +1831,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate }) 
                     </div>
                 )
             }
+
         </div >
     );
 };

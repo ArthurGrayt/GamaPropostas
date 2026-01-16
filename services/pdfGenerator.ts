@@ -17,9 +17,29 @@ interface ModuleConfig {
 
 export interface PdfOptions {
   companyNameType: 'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA';
-  customCompanyName?: string; // If 'custom' is needed later, or we pass the resolved string directly
+  customCompanyName?: string;
   moduleObservations?: Record<string, string>;
   showItemObservations?: boolean;
+  customIntro?: string;
+  customFooter?: string;
+  customHeaderTitle?: string;
+  customProposalPrefix?: string;
+  customTableHeaders?: { col1: string; col2: string; col3: string };
+  customObservationLabel?: string;
+  whoWeAreTitle?: string;
+  whoWeAreText?: string;
+  ourTeamTitle?: string;
+  teamCol1Title?: string;
+  teamCol1Text?: string;
+  teamCol2Title?: string;
+  teamCol2Text?: string;
+  whyChooseTitle?: string;
+  whyChooseText?: string;
+  introExames?: string;
+  introDocumentos?: string;
+  introEsocial?: string;
+  introTreinamentos?: string;
+  introServicosSST?: string;
 }
 
 // --- PDF Builder Class (Dynamic Content Only) ---
@@ -29,12 +49,31 @@ class DynamicContentBuilder {
   private pageLabels: Map<number, string> = new Map();
   private moduleObservations: Record<string, string> = {};
   private showItemObservations: boolean = false;
+  private customIntro?: string;
+  private customFooter?: string;
+  private customHeaderTitle?: string;
+  private customProposalPrefix?: string;
+  private customTableHeaders?: { col1: string; col2: string; col3: string };
+  private customObservationLabel?: string;
 
-  constructor(proposal: EnrichedProposal, moduleObservations: Record<string, string> = {}, showItemObservations: boolean = false) {
+  constructor(proposal: EnrichedProposal, options: PdfOptions) {
     this.doc = new jsPDF('p', 'pt', 'a4');
     this.proposal = proposal;
-    this.moduleObservations = moduleObservations;
-    this.showItemObservations = showItemObservations;
+    this.moduleObservations = options.moduleObservations || {};
+    this.showItemObservations = options.showItemObservations || false;
+    this.customIntro = options.customIntro;
+    this.customFooter = options.customFooter;
+    this.customHeaderTitle = options.customHeaderTitle;
+    this.customProposalPrefix = options.customProposalPrefix;
+    this.customTableHeaders = options.customTableHeaders;
+    this.customObservationLabel = options.customObservationLabel;
+
+    // Assign module intros
+    (this as any).introExames = options.introExames;
+    (this as any).introDocumentos = options.introDocumentos;
+    (this as any).introEsocial = options.introEsocial;
+    (this as any).introTreinamentos = options.introTreinamentos;
+    (this as any).introServicosSST = options.introServicosSST;
   }
 
   public build(): Uint8Array {
@@ -96,7 +135,7 @@ class DynamicContentBuilder {
       if (index > 0) {
         this.doc.addPage();
       }
-      this.drawModule(mod, currentPageNumber);
+      this.drawModule(mod, currentPageNumber, index === 0);
       currentPageNumber++;
     });
 
@@ -106,7 +145,7 @@ class DynamicContentBuilder {
     return new Uint8Array(this.doc.output('arraybuffer'));
   }
 
-  private drawModule(module: ModuleConfig, basePageNumber: number): void {
+  private drawModule(module: ModuleConfig, basePageNumber: number, isFirstModule: boolean): void {
     const startPage = this.doc.getNumberOfPages();
     this.pageLabels.set(startPage, basePageNumber.toString());
 
@@ -114,19 +153,25 @@ class DynamicContentBuilder {
     let yPos = MARGIN * 2;
 
     // "O que será feito :" - Only on the very first dynamic page (Page 3)
-    if (basePageNumber === 3) {
+    if (isFirstModule) {
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(16);
       this.doc.setTextColor('#000000');
-      this.doc.text('O que será feito :', MARGIN, yPos);
+      this.doc.text(this.customHeaderTitle || 'O que será feito :', MARGIN, yPos);
       yPos += 40;
+    } else {
+      // Add some top spacing for subsequent module pages
+      yPos += 20;
     }
 
     // Module Title (Centered "PROPOSTA [NOME]")
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(14);
     this.doc.setTextColor('#000000');
-    this.doc.text(`PROPOSTA ${module.title}`, pageWidth / 2, yPos, { align: 'center' });
+    const prefix = this.customProposalPrefix !== undefined ? this.customProposalPrefix : 'PROPOSTA';
+    // Handle empty prefix gracefully
+    const fullTitle = prefix ? `${prefix} ${module.title}` : module.title;
+    this.doc.text(fullTitle, pageWidth / 2, yPos, { align: 'center' });
     yPos += 20;
 
     // Client Name (Centered)
@@ -135,15 +180,34 @@ class DynamicContentBuilder {
     this.doc.text(this.proposal.cliente.nome.toUpperCase(), pageWidth / 2, yPos, { align: 'center' });
     yPos += 30;
 
-    // Intro Text - Only for EXAMES
-    if (module.title === 'EXAMES') {
+    // Intro Text Selection Logic
+    let introText = '';
+
+    // Normalize module title to find matching intro
+    const titleUpper = module.title.toUpperCase();
+
+    // Explicit Mapping based on what we have in Options
+    if (titleUpper.includes('EXAME')) {
+      introText = ((this as any).introExames) || ((this as any).customIntro) || '';
+      if (!introText && !((this as any).introExames)) {
+        introText = "A seguir, tem-se os valores dos principais exames que podem estar atrelados a algum cargo na empresa, não implicando na necessidade de contratação de todos eles, mas somente aqueles que forem necessários de acordo com o PCMSO da empresa.\n\n" +
+          "Todos os exames são realizados em nosso espaço da Clínica Gama Center, incluindo coleta de material para exames laboratoriais, exame toxicológico e outros exames complementares, com destaque ao Raio-X. Priorizamos a otimização atendimento a fim de se reduzir o tempo necessário para o trabalhador retornar à empresa.\n\n" +
+          "Estes são os valores dos principais exames que podem estar atrelados a algum cargo na empresa, não implicando na necessidade de contratação de todos eles, mas somente daqueles que forem demandados de acordo com o PCMSO da empresa.";
+      }
+    } else if (titleUpper.includes('DOCUMENTO')) {
+      introText = (this as any).introDocumentos || '';
+    } else if (titleUpper.includes('ESOCIAL')) {
+      introText = (this as any).introEsocial || '';
+    } else if (titleUpper.includes('TREINAMENTO')) {
+      introText = (this as any).introTreinamentos || '';
+    } else if (titleUpper.includes('SST') || titleUpper.includes('SERVIÇOS')) {
+      introText = (this as any).introServicosSST || '';
+    }
+
+    if (introText) {
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
       this.doc.setTextColor('#333333');
-
-      const introText = "A seguir, tem-se os valores dos principais exames que podem estar atrelados a algum cargo na empresa, não implicando na necessidade de contratação de todos eles, mas somente aqueles que forem necessários de acordo com o PCMSO da empresa.\n\n" +
-        "Todos os exames são realizados em nosso espaço da Clínica Gama Center, incluindo coleta de material para exames laboratoriais, exame toxicológico e outros exames complementares, com destaque ao Raio-X. Priorizamos a otimização atendimento a fim de se reduzir o tempo necessário para o trabalhador retornar à empresa.\n\n" +
-        "Estes são os valores dos principais exames que podem estar atrelados a algum cargo na empresa, não implicando na necessidade de contratação de todos eles, mas somente daqueles que forem demandados de acordo com o PCMSO da empresa.";
 
       const splitText = this.doc.splitTextToSize(introText, pageWidth - (MARGIN * 2));
       this.doc.text(splitText, MARGIN, yPos);
@@ -155,7 +219,7 @@ class DynamicContentBuilder {
     const tableBody = module.items.map((item, index) => {
       let description = item.procedimento?.nome || 'Item sem nome';
       if (this.showItemObservations && item.observacao) {
-        description += `\nObservação: ${item.observacao}`;
+        description += `\n${this.customObservationLabel || 'Observação:'} ${item.observacao}`;
       }
       return [
         (index + 1).toString().padStart(2, '0'),
@@ -165,9 +229,15 @@ class DynamicContentBuilder {
     });
 
     // Draw Table
+    const headers = [
+      this.customTableHeaders?.col1 || 'ITEM',
+      this.customTableHeaders?.col2 || 'DESCRIÇÃO DO DOCUMENTO',
+      this.customTableHeaders?.col3 || 'VALOR UNITÁRIO'
+    ];
+
     (this.doc as any).autoTable({
       startY: yPos,
-      head: [['ITEM', 'DESCRIÇÃO DO DOCUMENTO', 'VALOR UNITÁRIO']],
+      head: [headers],
       body: tableBody,
       theme: 'grid',
       headStyles: { fillColor: '#EAEAEA', textColor: '#333333', fontStyle: 'bold', lineColor: '#CCCCCC', lineWidth: 0.1 },
@@ -211,7 +281,7 @@ class DynamicContentBuilder {
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
       this.doc.setTextColor('#333333');
-      this.doc.text('Observação:', MARGIN, currentY);
+      this.doc.text(this.customObservationLabel || 'Observação:', MARGIN, currentY);
       currentY += 15;
 
       this.doc.setFont('helvetica', 'normal');
@@ -233,7 +303,7 @@ class DynamicContentBuilder {
       this.doc.setFont('helvetica', 'normal');
       this.doc.setTextColor('#888888');
 
-      const footerText = `Gama Center SST - 2025 - Página ${pageLabel}`;
+      const footerText = this.customFooter !== undefined ? this.customFooter : `Gama Center SST - 2025 - Página ${pageLabel}`;
       const textWidth = this.doc.getStringUnitWidth(footerText) * this.doc.getFontSize() / this.doc.internal.scaleFactor;
       const x = (A4_WIDTH - textWidth) / 2;
       const y = A4_HEIGHT - 20;
@@ -279,21 +349,16 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
       }
     };
 
-    // 1. Fetch the Model PDF
-    // Ensure the file is in the public folder and accessible via this URL
-    const modelPdfBytes = await fetch('/model.pdf').then(res => {
-      if (!res.ok) throw new Error('Failed to load model.pdf');
-      return res.arrayBuffer();
-    });
+    // 2. [DEPRECATED] Model PDF Loading - We now generate page 2 dynamically
+    // const modelPdfBytes = ... 
+    // const modelDoc = ...
 
-    // 2. Load Model PDF
-    const modelDoc = await PDFDocument.load(modelPdfBytes);
 
     // 3. Generate Dynamic Content (Modules)
-    // Pass the modified proposal with filtered items and resolved name
-    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf, options?.moduleObservations, options?.showItemObservations);
-    const dynamicPdfBytes = dynamicBuilder.build();
-    const dynamicDoc = await PDFDocument.load(dynamicPdfBytes);
+    // 7. Build Dynamic Content (Modules + Footers)
+    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf, options || { companyNameType: 'NOME' });
+    const dynamicContentBytes = dynamicBuilder.build();
+    const dynamicDoc = await PDFDocument.load(dynamicContentBytes);
 
     // 4. Create Final PDF
     const finalDoc = await PDFDocument.create();
@@ -347,15 +412,115 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
       })
     );
 
-    // Attach annotations to the page
-    coverPage.node.set(PDFName.of('Annots'), finalDoc.context.obj([waLink, igLink]));
-    // ---------------------------
+    // B. Intro Page (Dynamic)
+    // We generate a new PDF page(s) for the Institutional content
+    const introDoc = new jsPDF('p', 'pt', 'a4');
+    const pageWidth = introDoc.internal.pageSize.width;
+    const pageHeight = introDoc.internal.pageSize.height;
 
-    // B. Intro Page (From Model - Page 2, Index 1)
-    const [introPage] = await finalDoc.copyPages(modelDoc, [1]);
-    finalDoc.addPage(introPage);
+    // Background color (OPTIONAL - pure white for now)
+    introDoc.setFillColor(255, 255, 255);
+    introDoc.rect(0, 0, pageWidth, pageHeight, 'F');
 
-    // C. Dynamic Modules
+    // --- Layout Logic ---
+    let y = 60;
+    const leftColX = MARGIN;
+    const colWidth = (pageWidth - (MARGIN * 3)) / 2; // split page roughly? Or vertically stacked?
+    // User requested: "Quem somos", "Quem é nosso time", "Por que escolher". 
+    // Usually these are vertically stacked or in a grid. Let's stack them for safety, or mimicking a specific layout.
+    // Let's assume a clean vertical layout with proper spacing.
+
+    // 1. Quem Somos
+    introDoc.setFont('helvetica', 'bold');
+    introDoc.setFontSize(14);
+    introDoc.setTextColor(PRIMARY_COLOR);
+    introDoc.text(options?.whoWeAreTitle || "QUEM SOMOS", MARGIN, y);
+    y += 20;
+
+    introDoc.setFont('helvetica', 'normal');
+    introDoc.setFontSize(10);
+    introDoc.setTextColor('#333333');
+    const whoText = options?.whoWeAreText || "";
+    const splitWho = introDoc.splitTextToSize(whoText, pageWidth - (MARGIN * 2));
+    introDoc.text(splitWho, MARGIN, y);
+    y += introDoc.getTextDimensions(splitWho).h + 30;
+
+    // 2. Quem é Nosso Time
+    introDoc.setFont('helvetica', 'bold');
+    introDoc.setFontSize(14);
+    introDoc.setTextColor(PRIMARY_COLOR);
+    introDoc.text(options?.ourTeamTitle || "Quem é nosso time?", MARGIN, y);
+    y += 20;
+
+    // Team Columns Logic
+    const colGap = 10;
+    const teamColWidth = (pageWidth - (MARGIN * 2) - colGap) / 2;
+    const col2X = MARGIN + teamColWidth + colGap;
+
+    // Col 1 Header (Gray Bg)
+    introDoc.setFillColor(234, 234, 234); // #EAEAEA
+    introDoc.rect(MARGIN, y, teamColWidth, 20, 'F');
+    introDoc.setFontSize(10);
+    introDoc.setTextColor('#000000');
+    introDoc.text(options?.teamCol1Title || "Segurança do trabalho", MARGIN + 5, y + 14);
+
+    // Col 2 Header (Gray Bg)
+    introDoc.rect(col2X, y, teamColWidth, 20, 'F');
+    introDoc.text(options?.teamCol2Title || "Medicina Ocupacional", col2X + 5, y + 14);
+    y += 30;
+
+    // Col 1 Content
+    introDoc.setFont('helvetica', 'normal');
+    introDoc.setFontSize(10);
+    introDoc.setTextColor('#333333');
+    const col1Text = options?.teamCol1Text || "";
+    // Note: User input usually uses newlines. We should arguably split by newlines to ensure bullets align?
+    // jsPDF splitTextToSize handles newlines well.
+    const splitCol1 = introDoc.splitTextToSize(col1Text, teamColWidth - 10);
+    introDoc.text(splitCol1, MARGIN + 5, y);
+
+    // Col 2 Content
+    const col2Text = options?.teamCol2Text || "";
+    const splitCol2 = introDoc.splitTextToSize(col2Text, teamColWidth - 10);
+    introDoc.text(splitCol2, col2X + 5, y);
+
+    // Calc height based on max of both cols
+    const h1 = introDoc.getTextDimensions(splitCol1).h;
+    const h2 = introDoc.getTextDimensions(splitCol2).h;
+    y += Math.max(h1, h2) + 30;
+
+    // 3. Por que escolher
+    introDoc.setFont('helvetica', 'bold');
+    introDoc.setFontSize(14);
+    introDoc.setTextColor(PRIMARY_COLOR);
+    introDoc.text(options?.whyChooseTitle || "Por que escolher a Gama Center?", MARGIN, y);
+    y += 20;
+
+    introDoc.setFont('helvetica', 'normal');
+    introDoc.setFontSize(10);
+    introDoc.setTextColor('#333333');
+    const whyText = options?.whyChooseText || "";
+    const splitWhy = introDoc.splitTextToSize(whyText, pageWidth - (MARGIN * 2));
+    introDoc.text(splitWhy, MARGIN, y);
+
+    // Add Footer to this page too? Usually Intro pages have footers.
+    const introLabel = "2"; // Usually Page 2
+    introDoc.setFontSize(8);
+    introDoc.setTextColor('#888888');
+    const footerTxt = options?.customFooter !== undefined ? options.customFooter : `Gama Center SST - 2025 - Página ${introLabel}`;
+    const txtWidth = introDoc.getStringUnitWidth(footerTxt) * 8 / introDoc.internal.scaleFactor;
+    const fx = (pageWidth - txtWidth) / 2;
+    const fy = pageHeight - 20;
+    introDoc.text(footerTxt, fx, fy);
+
+    // Convert to PDF-Lib and Add
+    const introBytes = new Uint8Array(introDoc.output('arraybuffer'));
+    const introPdfDoc = await PDFDocument.load(introBytes);
+    const [finalIntroPage] = await finalDoc.copyPages(introPdfDoc, [0]);
+    finalDoc.addPage(finalIntroPage);
+
+
+    // C. Dynamic Modules (Existing Logic)
     if (dynamicDoc.getPageCount() > 0) {
       const dynamicPages = await finalDoc.copyPages(dynamicDoc, dynamicDoc.getPageIndices());
       dynamicPages.forEach(page => finalDoc.addPage(page));

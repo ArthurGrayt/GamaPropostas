@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+
 import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
-import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User, FileText } from 'lucide-react';
+import { TextImportModal } from './TextImportModal';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
 
 interface Props {
@@ -88,6 +91,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
   const [cartActiveTab, setCartActiveTab] = useState<'itens' | 'prazos'>('itens');
   const [cartSortOrder, setCartSortOrder] = useState<CartSortOrder>('RECENT');
+  const [isTextImportOpen, setIsTextImportOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -372,6 +376,22 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       newDates[Number(procId)] = globalDeliveryDate;
     });
     setDeliveryDates(newDates);
+  };
+
+  const handleTextImport = (items: { procedureId: number; quantity: number }[]) => {
+    setSelectedItemsMap(prev => {
+      const newState = { ...prev };
+      items.forEach(({ procedureId, quantity }) => {
+        const currentQty = newState[procedureId]?.quantity || 0;
+        newState[procedureId] = {
+          quantity: currentQty + quantity,
+          priceTier: activeClientModality,
+          addedAt: Date.now()
+        };
+      });
+      return newState;
+    });
+    setIsTextImportOpen(false);
   };
 
   const handleCreateProposal = async () => {
@@ -680,10 +700,10 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         </div>
       </main>
 
-      {isCartOpen && (
+      {isCartOpen && createPortal(
         <>
-          <div onClick={() => setIsCartOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-backdrop-fade-in"></div>
-          <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-stone-50 dark:bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-50 flex flex-col animate-cart-slide-in">
+          <div onClick={() => setIsCartOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-backdrop-fade-in"></div>
+          <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-stone-50 dark:bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-[9999] flex flex-col animate-cart-slide-in">
             <div className="p-4 border-b dark:border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg"><ShoppingCart size={20} /></div>
@@ -740,7 +760,17 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                     )}
                   </div>
                 </div>
-                {summaryItems.length === 0 && <p className="text-center text-zinc-400 py-4">Nenhum item adicionado.</p>}
+                {summaryItems.length === 0 && (
+                  <div className="text-center py-8 flex flex-col items-center gap-3">
+                    <p className="text-zinc-400">Nenhum item adicionado.</p>
+                    <button
+                      onClick={() => setIsTextImportOpen(true)}
+                      className="text-blue-600 dark:text-blue-400 font-medium text-sm flex items-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-xl transition-all"
+                    >
+                      <FileText size={16} /> Adicionar por texto
+                    </button>
+                  </div>
+                )}
                 {summaryItems.map(item => (
                   <div key={item.procedimento.id} className={`p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10 relative transition-all ${openSidebarPriceMenu === item.procedimento.id ? 'z-50' : 'z-0'}`}>
                     <div className="flex-1">
@@ -807,8 +837,16 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
               </div>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
+
+      <TextImportModal
+        isOpen={isTextImportOpen}
+        onClose={() => setIsTextImportOpen(false)}
+        onConfirm={handleTextImport}
+        catalog={catalog}
+      />
 
       {isCreatingClient && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
