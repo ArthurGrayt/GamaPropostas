@@ -49,6 +49,7 @@ export interface PdfOptions {
 
   customModuleTitles?: Record<string, string>;
   footer?: string;
+  coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
 }
 
 // Helper to fetch and convert image to Base64 for jsPDF
@@ -515,41 +516,59 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
       coverPage.drawImage(coverImage, { x: 0, y: 0, width: cpWidth, height: cpHeight });
     }
 
-    // --- ADD CLICKABLE LINKS ---
-    // Coordinates (Bottom-Left logic): [xMin, yMin, xMax, yMax]
-    // A4 width: ~595, height: ~842. Bottom-left is (0,0).
+    // Add Generation Date (approx 50px above the contact info links ~ y=145)
+    const helveticaFont = await finalDoc.embedFont(StandardFonts.Helvetica);
+    const dateText = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const dateSize = 12;
+    const dateWidth = helveticaFont.widthOfTextAtSize(dateText, dateSize);
 
-    // 1. WhatsApp Link (Higher up in the footer)
-    // Target: https://api.whatsapp.com/send?phone=5531971920766
-    const waLink = finalDoc.context.register(
-      finalDoc.context.obj({
-        Type: 'Annot',
-        Subtype: 'Link',
-        Rect: [50, 115, 180, 145], // Reduced width to avoid overlapping the landline number
-        Border: [0, 0, 0],
-        A: {
-          Type: 'Action',
-          S: 'URI',
-          URI: PDFString.of('https://api.whatsapp.com/send?phone=5531971920766'),
-        },
-      })
-    );
+    coverPage.drawText(dateText, {
+      x: (cpWidth - dateWidth) / 2,
+      y: 200, // 145 + ~55
+      size: dateSize,
+      font: helveticaFont,
+      color: rgb(0.2, 0.2, 0.2), // Dark Gray
+    });
 
-    // 2. Instagram Link (Below the phone)
-    // Target: https://www.instagram.com/gamacentersst/
-    const igLink = finalDoc.context.register(
-      finalDoc.context.obj({
-        Type: 'Annot',
-        Subtype: 'Link',
-        Rect: [50, 80, 300, 110], // Generous hit box
-        Border: [0, 0, 0],
-        A: {
-          Type: 'Action',
-          S: 'URI',
-          URI: PDFString.of('https://www.instagram.com/gamacentersst/'),
-        },
-      })
-    );
+    // --- ADD CLICKABLE LINKS (DYNAMIC) ---
+    // Coordinates conversion: Web % (Top-Left) -> PDF Points (Bottom-Left)
+    if (options && options.coverLinks && options.coverLinks.length > 0) {
+      const linksAnnots = options.coverLinks.map(link => {
+        if (!link.url || link.url.trim() === '') return null;
+
+        const x = (link.x / 100) * cpWidth;
+        const w = (link.w / 100) * cpWidth;
+        const h = (link.h / 100) * cpHeight;
+
+        // Web Y is from top. PDF Y is from bottom.
+        // visualTop = (link.y / 100) * cpHeight
+        // visualBottom = visualTop + h
+        // PDF Y (min) = PageHeight - visualBottom
+        // PDF Y (max) = PageHeight - visualTop
+
+        const visualTopFromTop = (link.y / 100) * cpHeight;
+        const pdfYMin = cpHeight - (visualTopFromTop + h);
+        const pdfYMax = cpHeight - visualTopFromTop;
+
+        return finalDoc.context.register(
+          finalDoc.context.obj({
+            Type: 'Annot',
+            Subtype: 'Link',
+            Rect: [x, pdfYMin, x + w, pdfYMax],
+            Border: [0, 0, 0],
+            A: {
+              Type: 'Action',
+              S: 'URI',
+              URI: PDFString.of(link.url),
+            },
+          })
+        );
+      }).filter(l => l !== null);
+
+      if (linksAnnots.length > 0) {
+        coverPage.node.set(PDFName.of('Annots'), finalDoc.context.obj(linksAnnots));
+      }
+    }
 
     // B. Intro Page (Dynamic)
     // We generate a new PDF page(s) for the Institutional content

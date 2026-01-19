@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, FileText, Type, List, Tag, Image, Upload, Trash2, Loader2, Check, SlidersHorizontal } from 'lucide-react';
 import { uploadPdfAsset } from '../services/mockData';
 
@@ -34,6 +34,7 @@ interface PdfTexts {
     marginTop?: number;
     marginBottom?: number;
     customModuleTitles?: Record<string, string>;
+    coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
 }
 
 interface PdfTextEditorModalProps {
@@ -56,6 +57,65 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
     const [activeImageSection, setActiveImageSection] = useState<'cover' | 'backCover' | 'background'>('cover');
     const [activeModule, setActiveModule] = useState<'Exames' | 'Documentos' | 'eSocial' | 'Treinamentos' | 'Serviços SST'>('Exames');
     const [isUploading, setIsUploading] = useState<string | null>(null);
+
+    // VISUAL EDITOR STATE
+    const imageContainerRef = useRef<HTMLDivElement>(null);
+    const [drawingLink, setDrawingLink] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (!imageContainerRef.current) return;
+        const rect = imageContainerRef.current.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setDrawingLink({ startX: x, startY: y, currentX: x, currentY: y });
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!drawingLink || !imageContainerRef.current) return;
+        const rect = imageContainerRef.current.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setDrawingLink(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
+    };
+
+    const handleMouseUp = () => {
+        if (!drawingLink) return;
+
+        // Calculate standardized x, y, w, h
+        const x = Math.min(drawingLink.startX, drawingLink.currentX);
+        const y = Math.min(drawingLink.startY, drawingLink.currentY);
+        const w = Math.abs(drawingLink.currentX - drawingLink.startX);
+        const h = Math.abs(drawingLink.currentY - drawingLink.startY);
+
+        // Ignore tiny accidental clicks (< 1%)
+        if (w > 1 && h > 1) {
+            const newLink = {
+                id: Math.random().toString(36).substr(2, 9),
+                x, y, w, h,
+                url: ''
+            };
+            setLocalTexts(prev => ({
+                ...prev,
+                coverLinks: [...(prev.coverLinks || []), newLink]
+            }));
+        }
+        setDrawingLink(null);
+    };
+
+    const handleRemoveLink = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setLocalTexts(prev => ({
+            ...prev,
+            coverLinks: prev.coverLinks?.filter(l => l.id !== id)
+        }));
+    };
+
+    const handleUpdateLinkUrl = (id: string, url: string) => {
+        setLocalTexts(prev => ({
+            ...prev,
+            coverLinks: prev.coverLinks?.map(l => l.id === id ? { ...l, url } : l)
+        }));
+    };
 
     // Reset state when modal opens or initialTexts changes
     useEffect(() => {
@@ -209,47 +269,109 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
 
                                 <div className="flex flex-col gap-8 h-full">
 
-                                    {/* Cover Image Upload */}
+                                    {/* Cover Image Editor */}
                                     {activeImageSection === 'cover' && (
-                                        <div className="mt-4 space-y-4 animate-fade-in">
+                                        <div className="mt-4 space-y-4 animate-fade-in flex flex-col h-full">
                                             <div className="flex items-center justify-between">
                                                 <h3 className="font-bold text-zinc-800 flex items-center gap-2">
                                                     <Image size={18} className="text-blue-500" />
-                                                    Capa Personalizada
+                                                    Capa Personalizada e Links
                                                 </h3>
-                                                {localTexts.coverImage && (
-                                                    <button
-                                                        onClick={() => handleRemoveImage('coverImage')}
-                                                        className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                                                <div className="flex gap-2">
+                                                    {localTexts.coverImage && (
+                                                        <button
+                                                            onClick={() => handleRemoveImage('coverImage')}
+                                                            className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                                                        >
+                                                            <Trash2 size={12} /> Remover Capa
+                                                        </button>
+                                                    )}
+                                                    <label className="cursor-pointer bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1 rounded-md text-xs font-bold transition-colors flex items-center gap-1">
+                                                        <Upload size={12} /> {localTexts.coverImage ? 'Trocar Imagem' : 'Enviar Imagem'}
+                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'coverImage')} />
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-xs text-zinc-500 bg-blue-50 p-2 rounded border border-blue-100">
+                                                Clique e arraste na imagem para criar áreas clicáveis. Defina o link para cada área abaixo.
+                                            </div>
+
+                                            {/* Image & Drawing Area */}
+                                            <div
+                                                className="relative w-full aspect-[21/29.7] rounded-lg border border-zinc-300 bg-zinc-100 overflow-hidden select-none"
+                                                ref={imageContainerRef}
+                                                onMouseDown={handleMouseDown}
+                                                onMouseMove={handleMouseMove}
+                                                onMouseUp={handleMouseUp}
+                                                onMouseLeave={handleMouseUp}
+                                            >
+                                                <img
+                                                    src={localTexts.coverImage || '/cover_page.jpg'}
+                                                    alt="Capa"
+                                                    className="absolute inset-0 w-full h-full object-fill pointer-events-none"
+                                                />
+
+                                                {/* Existing Links */}
+                                                {localTexts.coverLinks?.map(link => (
+                                                    <div
+                                                        key={link.id}
+                                                        className="absolute border-2 border-blue-500 bg-blue-500/20 hover:bg-blue-500/30 transition-colors group cursor-pointer"
+                                                        style={{
+                                                            left: `${link.x}%`,
+                                                            top: `${link.y}%`,
+                                                            width: `${link.w}%`,
+                                                            height: `${link.h}%`
+                                                        }}
                                                     >
-                                                        <Trash2 size={12} /> Remover
-                                                    </button>
+                                                        <button
+                                                            onClick={(e) => handleRemoveLink(link.id, e)}
+                                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                                        >
+                                                            <X size={10} />
+                                                        </button>
+                                                        {(!link.url) && (
+                                                            <div className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-blue-800 bg-white/70">
+                                                                Sem Link
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+
+                                                {/* Drawing New Link */}
+                                                {drawingLink && (
+                                                    <div
+                                                        className="absolute border-2 border-green-500 bg-green-500/20 pointer-events-none"
+                                                        style={{
+                                                            left: `${Math.min(drawingLink.startX, drawingLink.currentX)}%`,
+                                                            top: `${Math.min(drawingLink.startY, drawingLink.currentY)}%`,
+                                                            width: `${Math.abs(drawingLink.currentX - drawingLink.startX)}%`,
+                                                            height: `${Math.abs(drawingLink.currentY - drawingLink.startY)}%`
+                                                        }}
+                                                    />
                                                 )}
                                             </div>
 
-                                            <div className={`relative w-full aspect-[21/29.7] rounded-lg border-2 border-dashed ${localTexts.coverImage ? 'border-transparent' : 'border-zinc-300 hover:border-blue-400'} flex flex-col items-center justify-center transition-all bg-zinc-50 overflow-hidden group`}>
-                                                {localTexts.coverImage ? (
-                                                    <>
-                                                        <img src={localTexts.coverImage} alt="Capa" className="absolute inset-0 w-full h-full object-cover" />
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <label className="cursor-pointer bg-white text-zinc-800 px-4 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 transition-transform">
-                                                                Trocar Imagem
-                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'coverImage')} />
-                                                            </label>
+                                            {/* Links List for Editing */}
+                                            <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[100px]">
+                                                {localTexts.coverLinks && localTexts.coverLinks.length > 0 ? (
+                                                    localTexts.coverLinks.map((link, index) => (
+                                                        <div key={link.id} className="flex items-center gap-2 bg-zinc-50 p-2 rounded border border-zinc-200 text-xs">
+                                                            <span className="font-bold text-zinc-400 w-4">{index + 1}</span>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="https://..."
+                                                                value={link.url}
+                                                                onChange={(e) => handleUpdateLinkUrl(link.id, e.target.value)}
+                                                                className="flex-1 bg-white border border-zinc-300 rounded px-2 py-1 outline-none focus:border-blue-400"
+                                                            />
+                                                            <button onClick={(e) => handleRemoveLink(link.id, e)} className="text-zinc-400 hover:text-red-500">
+                                                                <Trash2 size={14} />
+                                                            </button>
                                                         </div>
-                                                    </>
+                                                    ))
                                                 ) : (
-                                                    <label className="cursor-pointer flex flex-col items-center gap-2 p-8 text-zinc-400 hover:text-blue-500 w-full h-full justify-center">
-                                                        {isUploading === 'coverImage' ? (
-                                                            <Loader2 className="animate-spin" size={32} />
-                                                        ) : (
-                                                            <>
-                                                                <Upload size={32} />
-                                                                <span className="text-sm font-medium">Clique para enviar imagem (A4 Vertical)</span>
-                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'coverImage')} />
-                                                            </>
-                                                        )}
-                                                    </label>
+                                                    <div className="text-center text-zinc-400 text-xs py-4">Nenhum link criado.</div>
                                                 )}
                                             </div>
                                         </div>

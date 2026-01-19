@@ -52,6 +52,10 @@ Todos os exames são realizados em nosso espaço da Clínica Gama Center, inclui
   marginTop: 40,
   marginBottom: 40,
   customModuleTitles: {},
+  coverLinks: [
+    { id: 'wa', x: 24.37, y: 83.61, w: 21.85, h: 2.73, url: 'https://api.whatsapp.com/send?phone=5531971920766' },
+    { id: 'ig', x: 24.37, y: 87.17, w: 21.85, h: 3.09, url: 'https://www.instagram.com/gamacentersst/' }
+  ],
 };
 
 // Main Content Component (Protected)
