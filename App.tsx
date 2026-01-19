@@ -279,6 +279,7 @@ const MainApp: React.FC = () => {
             onSelect={navigateToDetail}
             onStatusChange={handleQuickStatusUpdate}
             onCreate={navigateToCreate}
+            pdfTexts={pdfTexts}
           />
         ) : view === 'CREATE' ? (
           <ProposalCreate

@@ -9,13 +9,14 @@ import { getProposalById } from '../services/mockData';
 interface Props {
     proposals: EnrichedProposal[];
     onStatusChange: (id: number, newStatus: ProposalStatus) => void;
-
+    onSelect: (id: number) => void;
     onCreate: () => void;
+    pdfTexts: any; // Using any to avoid circular dependency with App.tsx defaults
 }
 
 type FilterType = 'ALL' | ProposalStatus;
 
-export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusChange, onCreate }) => {
+export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusChange, onCreate, pdfTexts }) => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
@@ -155,7 +156,49 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
         try {
             const fullProposal = await getProposalById(proposalId);
             if (fullProposal) {
-                await generateProposalPdf(fullProposal);
+                await generateProposalPdf(fullProposal, {
+                    companyNameType: 'NOME',
+                    moduleObservations: {},
+                    showItemObservations: false,
+                    customIntro: pdfTexts.intro,
+                    footer: pdfTexts.footer,
+                    customHeaderTitle: pdfTexts.headerTitle,
+                    customProposalPrefix: pdfTexts.proposalPrefix,
+                    customTableHeaders: pdfTexts.tableHeaders,
+                    customObservationLabel: pdfTexts.observationLabel,
+                    // Dynamic Acceptance Link using current location
+                    customAcceptanceLink: `${window.location.origin}${window.location.pathname}?mode=shared&id=${fullProposal.id}`,
+
+                    // Institutional
+                    whoWeAreTitle: pdfTexts.whoWeAreTitle,
+                    whoWeAreText: pdfTexts.whoWeAreText,
+                    ourTeamTitle: pdfTexts.ourTeamTitle,
+                    teamCol1Title: pdfTexts.teamCol1Title,
+                    teamCol1Text: pdfTexts.teamCol1Text,
+                    teamCol2Title: pdfTexts.teamCol2Title,
+                    teamCol2Text: pdfTexts.teamCol2Text,
+                    whyChooseTitle: pdfTexts.whyChooseTitle,
+                    whyChooseText: pdfTexts.whyChooseText,
+
+                    // Images
+                    customCoverUrl: pdfTexts.coverImage,
+                    customBackgroundUrl: pdfTexts.backgroundImage,
+                    customBackCoverUrl: pdfTexts.backCoverImage,
+
+                    // Margins
+                    customMargin: pdfTexts.margin,
+                    customMarginTop: pdfTexts.marginTop,
+                    customMarginBottom: pdfTexts.marginBottom,
+
+                    // Intros
+                    introExames: pdfTexts.introExames,
+                    introDocumentos: pdfTexts.introDocumentos,
+                    introEsocial: pdfTexts.introEsocial,
+                    introTreinamentos: pdfTexts.introTreinamentos,
+                    introServicosSST: pdfTexts.introServicosSST,
+                    customModuleTitles: pdfTexts.customModuleTitles,
+                    coverLinks: pdfTexts.coverLinks
+                });
             } else {
                 alert('Não foi possível carregar os dados completos da proposta.');
             }
