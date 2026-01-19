@@ -441,6 +441,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 customProposalPrefix: pdfTexts.proposalPrefix,
                 customTableHeaders: pdfTexts.tableHeaders,
                 customObservationLabel: pdfTexts.observationLabel,
+                customAcceptanceLink: `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`,
                 // Institutional
                 whoWeAreTitle: pdfTexts.whoWeAreTitle,
                 whoWeAreText: pdfTexts.whoWeAreText,

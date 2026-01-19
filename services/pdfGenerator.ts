@@ -50,6 +50,7 @@ export interface PdfOptions {
   customModuleTitles?: Record<string, string>;
   footer?: string;
   coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
+  customAcceptanceLink?: string;
 }
 
 // Helper to fetch and convert image to Base64 for jsPDF
@@ -82,10 +83,12 @@ class DynamicContentBuilder {
   private margin: number;
   private marginTop: number;
   private marginBottom: number;
+  private options: PdfOptions;
 
   constructor(proposal: EnrichedProposal, options: PdfOptions, customBackgroundBase64?: string) {
     this.doc = new jsPDF('p', 'pt', 'a4');
     this.proposal = proposal;
+    this.options = options;
     this.moduleObservations = options.moduleObservations || {};
     this.showItemObservations = options.showItemObservations || false;
     this.customIntro = options.customIntro;
@@ -199,6 +202,10 @@ class DynamicContentBuilder {
       this.drawModule(mod, currentPageNumber, index === 0);
       currentPageNumber++;
     });
+
+    // Add Closing Page (Validity & Acceptance)
+    this.addClosingPage();
+
 
     // Apply Footers to the dynamic pages
     this.applyFooters();
@@ -408,6 +415,47 @@ class DynamicContentBuilder {
 
       this.doc.text(footerText, x, y);
     }
+  }
+
+  private addClosingPage(): void {
+    const pageCount = this.doc.getNumberOfPages();
+    this.doc.setPage(pageCount);
+
+    let finalY = (this.doc as any).lastAutoTable?.finalY || 100;
+    const pageHeight = this.doc.internal.pageSize.height;
+    const pageWidth = this.doc.internal.pageSize.width;
+
+    // Ensure we have space (need ~150px due to extra spacing)
+    if (finalY + 160 > pageHeight - this.marginBottom) {
+      this.doc.addPage();
+      finalY = this.marginTop;
+    }
+
+    const closingY = finalY + 110;
+
+    // 1. Validity Text
+    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFontSize(10);
+    this.doc.setTextColor('#333333');
+    const validityText = "Esta proposta possui validade de 15 dias";
+    const valWidth = this.doc.getTextWidth(validityText);
+    this.doc.text(validityText, (pageWidth - valWidth) / 2, closingY);
+
+    // 2. Acceptance Link
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(12);
+    // PRIMARY_COLOR constant is outside class, ensure it's imported/available or use literal
+    this.doc.setTextColor('#008080'); // Hardcoded primary teal to be safe
+    const acceptText = "Clique aqui para aceitar a proposta";
+    const acceptWidth = this.doc.getTextWidth(acceptText);
+    const acceptX = (pageWidth - acceptWidth) / 2;
+    const acceptY = closingY + 20;
+
+    this.doc.text(acceptText, acceptX, acceptY);
+
+    // Add Link Annotation
+    const linkUrl = this.options.customAcceptanceLink || 'https://gamacentersst.com.br/aceitar';
+    this.doc.link(acceptX, acceptY - 12, acceptWidth, 15, { url: linkUrl });
   }
 }
 
@@ -716,6 +764,50 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     const [finalIntroPage] = await finalDoc.copyPages(introPdfDoc, [0]);
     finalDoc.addPage(finalIntroPage);
 
+
+    // --- Add Closing Text (Validity & Acceptance) ---
+    // We add this to the END of the dynamicDoc (last content page)
+    if (false) { // Disabled legacy code: logic moved to DynamicContentBuilder
+      const pageCount = (dynamicDoc as any).getNumberOfPages();
+      (dynamicDoc as any).setPage(pageCount);
+
+      let finalY = (dynamicDoc as any).lastAutoTable?.finalY || 100;
+      const pageHeight = (dynamicDoc as any).internal.pageSize.height;
+      const marginBottom = options?.customMarginBottom || 40;
+      const marginTop = options?.customMarginTop || 40;
+
+      // Ensure we have space (need ~50px)
+      if (finalY + 80 > pageHeight - marginBottom) {
+        (dynamicDoc as any).addPage();
+        finalY = marginTop;
+      }
+
+      const closingY = finalY + 30;
+
+      // 1. Validity Text
+      (dynamicDoc as any).setFont('helvetica', 'normal');
+      (dynamicDoc as any).setFontSize(10);
+      (dynamicDoc as any).setTextColor('#333333');
+      const validityText = "Esta proposta possui validade de 15 dias";
+      const valWidth = (dynamicDoc as any).getTextWidth(validityText);
+      const pageWidth = (dynamicDoc as any).internal.pageSize.width;
+      (dynamicDoc as any).text(validityText, (pageWidth - valWidth) / 2, closingY);
+
+      // 2. Acceptance Link
+      (dynamicDoc as any).setFont('helvetica', 'bold');
+      (dynamicDoc as any).setFontSize(12);
+      (dynamicDoc as any).setTextColor(PRIMARY_COLOR); // Use teal color for link
+      const acceptText = "Clique aqui para aceitar a proposta";
+      const acceptWidth = (dynamicDoc as any).getTextWidth(acceptText);
+      const acceptX = (pageWidth - acceptWidth) / 2;
+      const acceptY = closingY + 20;
+
+      (dynamicDoc as any).text(acceptText, acceptX, acceptY);
+
+      // Add Link Annotation
+      // jsPDF: link(x, y, w, h, options)
+      (dynamicDoc as any).link(acceptX, acceptY - 12, acceptWidth, 15, { url: 'https://gamacentersst.com.br/aceitar' });
+    }
 
     // C. Dynamic Modules (Existing Logic)
     if (dynamicDoc.getPageCount() > 0) {
