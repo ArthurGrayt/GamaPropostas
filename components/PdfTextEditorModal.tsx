@@ -621,7 +621,7 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                                 value={localTexts.footer}
                                 onChange={(e) => handleChange('footer', e.target.value)}
                                 className="w-full text-center text-[10px] text-zinc-500 outline-none bg-transparent font-sans border-b border-transparent focus:border-blue-300 focus:bg-blue-50/50 p-1 transition-all"
-                                placeholder="Gama Center SST - 2025 - Página X"
+                                placeholder="Gama Center SST - 2025"
                             />
                         </div>
                     </div>

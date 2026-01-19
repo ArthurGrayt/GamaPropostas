@@ -17,7 +17,7 @@ type ViewState = 'LIST' | 'DETAIL' | 'CREATE' | 'SETTINGS' | 'CLIENTS';
 // Define defaults outside component to export/reuse if needed, or just keep stable
 const DEFAULT_PDF_TEXTS = {
   intro: "A seguir, tem-se os valores dos principais exames que podem estar atrelados a algum cargo na empresa, não implicando na necessidade de contratação de todos eles, mas somente aqueles que forem necessários de acordo com o PCMSO da empresa.\n\nTodos os exames são realizados em nosso espaço da Clínica Gama Center, incluindo coleta de material para exames laboratoriais, exame toxicológico e outros exames complementares, com destaque ao Raio-X. Priorizamos a otimização atendimento a fim de se reduzir o tempo necessário para o trabalhador retornar à empresa.\n\nEstes são os valores dos principais exames que podem estar atrelados a algum cargo na empresa, não implicando na necessidade de contratação de todos eles, mas somente daqueles que forem demandados de acordo com o PCMSO da empresa.",
-  footer: "Gama Center SST - 2025 - Página X",
+  footer: "Gama Center SST - 2025",
   headerTitle: "O que será feito :",
   proposalPrefix: "PROPOSTA",
   tableHeaders: {

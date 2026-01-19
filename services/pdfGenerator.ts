@@ -46,7 +46,9 @@ export interface PdfOptions {
   customMargin?: number;
   customMarginTop?: number;
   customMarginBottom?: number;
+
   customModuleTitles?: Record<string, string>;
+  footer?: string;
 }
 
 // Helper to fetch and convert image to Base64 for jsPDF
@@ -86,7 +88,7 @@ class DynamicContentBuilder {
     this.moduleObservations = options.moduleObservations || {};
     this.showItemObservations = options.showItemObservations || false;
     this.customIntro = options.customIntro;
-    this.customFooter = options.customFooter;
+    this.customFooter = options.footer;
     this.customHeaderTitle = options.customHeaderTitle;
     this.customProposalPrefix = options.customProposalPrefix;
     this.customTableHeaders = options.customTableHeaders;
@@ -359,30 +361,50 @@ class DynamicContentBuilder {
   }
 
   private applyFooters(): void {
-    // If using custom background, we might want to skip standard footers?
-    // User requirement: "usar esse fundo em todas" replacing footer/header.
-    // So if custom background is present, we DO NOT draw the standard footer box.
-    if (this.customBackgroundBase64) return;
+    // We remove the restriction: "if (this.customBackgroundBase64) return;" 
+    // to allow footers even with custom backgrounds as requested.
 
-    const totalPages = this.doc.getNumberOfPages();
+    const localTotalPages = this.doc.getNumberOfPages();
+    // Assuming Cover (1) + Intro (1) + Back Cover (1) = 3 fixed pages
+    const GLOBAL_PAGE_OFFSET = 2; // Starts from Page 3
+    // Total = Cover(1) + Intro(1) + Dynamic(N) + Back(1)
+    const globalTotalPages = 2 + localTotalPages + 1;
+
     const A4_WIDTH = 595.28;
     const A4_HEIGHT = 841.89;
 
-    for (let i = 1; i <= totalPages; i++) {
+    for (let i = 1; i <= localTotalPages; i++) {
       this.doc.setPage(i);
-      const pageLabel = this.pageLabels.get(i) || i.toString();
+
+      // Calculate global page number
+      const currentGlobalPage = i + GLOBAL_PAGE_OFFSET;
 
       this.doc.setFontSize(8);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setTextColor('#888888');
 
-      const footerText = this.customFooter !== undefined ? this.customFooter : `Gama Center SST - 2025 - Página ${pageLabel}`;
+      // Base Text
+      let baseText = this.customFooter;
+      if (!baseText || baseText.trim() === '') {
+        baseText = 'Gama Center SST - 2025';
+      }
+      // Sanitize: Remove old placeholder if persisted
+      baseText = baseText.replace(' - Página X', '');
+
+      // Format: "Base Text - Página X de Y"
+      const footerText = `${baseText} - Página ${currentGlobalPage} de ${globalTotalPages}`;
+
       const textWidth = this.doc.getStringUnitWidth(footerText) * this.doc.getFontSize() / this.doc.internal.scaleFactor;
       const x = (A4_WIDTH - textWidth) / 2;
       const y = A4_HEIGHT - 20;
 
-      this.doc.setFillColor(255, 255, 255);
-      this.doc.rect(x - 5, y - 8, textWidth + 10, 12, 'F');
+      // Optional: Add a white background box for readability if using custom background
+      if (this.customBackgroundBase64) {
+        this.doc.setFillColor(255, 255, 255);
+        // Small padding
+        this.doc.rect(x - 4, y - 8, textWidth + 8, 10, 'F');
+      }
+
       this.doc.text(footerText, x, y);
     }
   }
@@ -596,6 +618,7 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     introDoc.text(options?.teamCol1Title || "Segurança do trabalho", customMargin + 5, y + 14);
 
     // Col 2 Header (Gray Bg)
+    introDoc.setFillColor(234, 234, 234);
     introDoc.rect(col2X, y, teamColWidth, 20, 'F');
     introDoc.text(options?.teamCol2Title || "Medicina Ocupacional", col2X + 5, y + 14);
     y += 30;
@@ -648,6 +671,25 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
 
       introDoc.text(footerTxt, fx, fy);
     }
+
+    // Draw Footer on Intro Page (Page 2)
+    const introFooterText = (options?.footer || 'Gama Center SST - 2025').replace(' - Página X', '');
+    const totalPagesGlobal = 3 + dynamicDoc.getPageCount(); // Cover(1) + Intro(1) + Dynamic + Back(1)
+    const introFooterFull = `${introFooterText} - Página 2 de ${totalPagesGlobal}`;
+
+    introDoc.setFontSize(8);
+    introDoc.setFont('helvetica', 'normal');
+    introDoc.setTextColor('#888888');
+
+    const introFooterWidth = introDoc.getStringUnitWidth(introFooterFull) * 8 / introDoc.internal.scaleFactor;
+    const introX = (pageWidth - introFooterWidth) / 2;
+    const introY = pageHeight - 20;
+
+    if (bgBase64) {
+      introDoc.setFillColor(255, 255, 255);
+      introDoc.rect(introX - 4, introY - 8, introFooterWidth + 8, 10, 'F');
+    }
+    introDoc.text(introFooterFull, introX, introY);
 
     // Convert to PDF-Lib and Add
     const introBytes = new Uint8Array(introDoc.output('arraybuffer'));

@@ -464,7 +464,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 customMargin: pdfTexts.margin,
                 customMarginTop: pdfTexts.marginTop,
                 customMarginBottom: pdfTexts.marginBottom,
-                customModuleTitles: pdfTexts.customModuleTitles
+                customModuleTitles: pdfTexts.customModuleTitles,
+                footer: pdfTexts.footer
             });
         } catch (error) {
             console.error("PDF Generation Error: ", error);
