@@ -612,16 +612,16 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
 
     // Col 1 Header (Gray Bg)
     introDoc.setFillColor(234, 234, 234); // #EAEAEA
-    introDoc.rect(customMargin, y, teamColWidth, 20, 'F');
+    introDoc.roundedRect(customMargin, y, teamColWidth, 20, 8, 8, 'F');
     introDoc.setFontSize(10);
     introDoc.setTextColor('#000000');
     introDoc.text(options?.teamCol1Title || "Segurança do trabalho", customMargin + 5, y + 14);
 
     // Col 2 Header (Gray Bg)
     introDoc.setFillColor(234, 234, 234);
-    introDoc.rect(col2X, y, teamColWidth, 20, 'F');
+    introDoc.roundedRect(col2X, y, teamColWidth, 20, 8, 8, 'F');
     introDoc.text(options?.teamCol2Title || "Medicina Ocupacional", col2X + 5, y + 14);
-    y += 30;
+    y += 35; // Increased visual gap
 
     // Col 1 Content
     introDoc.setFont('helvetica', 'normal');
