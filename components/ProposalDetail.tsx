@@ -31,6 +31,12 @@ interface Props {
         introEsocial?: string;
         introTreinamentos?: string;
         introServicosSST?: string;
+        coverImage?: string;
+        backgroundImage?: string;
+        backCoverImage?: string;
+        margin?: number;
+        marginTop?: number;
+        marginBottom?: number;
     };
 }
 
@@ -450,7 +456,14 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 introDocumentos: pdfTexts.introDocumentos,
                 introEsocial: pdfTexts.introEsocial,
                 introTreinamentos: pdfTexts.introTreinamentos,
-                introServicosSST: pdfTexts.introServicosSST
+                introServicosSST: pdfTexts.introServicosSST,
+                // Images
+                customCoverUrl: pdfTexts.coverImage,
+                customBackgroundUrl: pdfTexts.backgroundImage,
+                customBackCoverUrl: pdfTexts.backCoverImage,
+                customMargin: pdfTexts.margin,
+                customMarginTop: pdfTexts.marginTop,
+                customMarginBottom: pdfTexts.marginBottom
             });
         } catch (error) {
             console.error("PDF Generation Error: ", error);

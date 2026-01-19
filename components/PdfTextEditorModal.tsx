@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, FileText, Type, List, Tag } from 'lucide-react';
+import { X, Save, FileText, Type, List, Tag, Image, Upload, Trash2, Loader2, Check, SlidersHorizontal } from 'lucide-react';
+import { uploadPdfAsset } from '../services/mockData';
 
 interface PdfTexts {
     intro: string;
@@ -26,6 +27,12 @@ interface PdfTexts {
     introEsocial?: string;
     introTreinamentos?: string;
     introServicosSST?: string;
+    coverImage?: string;
+    backgroundImage?: string;
+    backCoverImage?: string;
+    margin?: number;
+    marginTop?: number;
+    marginBottom?: number;
 }
 
 interface PdfTextEditorModalProps {
@@ -44,8 +51,10 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
     defaultTexts
 }) => {
     const [localTexts, setLocalTexts] = useState<PdfTexts>(initialTexts);
-    const [activeTab, setActiveTab] = useState<'institutional' | 'modules'>('institutional');
+    const [activeTab, setActiveTab] = useState<'institutional' | 'modules' | 'images'>('institutional');
+    const [activeImageSection, setActiveImageSection] = useState<'cover' | 'backCover' | 'background'>('cover');
     const [activeModule, setActiveModule] = useState<'Exames' | 'Documentos' | 'eSocial' | 'Treinamentos' | 'Serviços SST'>('Exames');
+    const [isUploading, setIsUploading] = useState<string | null>(null);
 
     // Reset state when modal opens or initialTexts changes
     useEffect(() => {
@@ -68,6 +77,36 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
         setLocalTexts(prev => ({
             ...prev,
             tableHeaders: { ...prev.tableHeaders, [col]: value }
+        }));
+    };
+
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, field: 'coverImage' | 'backgroundImage' | 'backCoverImage') => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(field);
+        try {
+            const { publicUrl, error } = await uploadPdfAsset(file);
+            if (publicUrl) {
+                setLocalTexts(prev => ({
+                    ...prev,
+                    [field]: publicUrl
+                }));
+            } else {
+                alert(`Erro ao fazer upload da imagem: ${error || 'Erro desconhecido'}`);
+            }
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            alert('Erro ao fazer upload da imagem.');
+        } finally {
+            setIsUploading(null);
+        }
+    };
+
+    const handleRemoveImage = (field: 'coverImage' | 'backgroundImage' | 'backCoverImage') => {
+        setLocalTexts(prev => ({
+            ...prev,
+            [field]: undefined
         }));
     };
 
@@ -116,6 +155,12 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                         >
                             Módulos (Págs 3+)
                         </button>
+                        <button
+                            onClick={() => setActiveTab('images')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'images' ? 'bg-white shadow text-blue-600' : 'text-zinc-500 hover:text-zinc-700'}`}
+                        >
+                            Imagens
+                        </button>
                     </div>
 
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
@@ -129,7 +174,205 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                     {/* A4 Page Container */}
                     <div className="w-full max-w-[21cm] min-h-[29.7cm] bg-white text-black shadow-2xl p-[2cm] flex flex-col mb-8 relative transition-all duration-300">
 
-                        {activeTab === 'institutional' ? (
+                        {activeTab === 'images' ? (
+                            <>
+                                <h2 className="text-zinc-300 font-bold text-center mb-8 uppercase tracking-widest text-[10px] top-4 absolute w-full left-0">--- IMAGENS E FUNDOS ---</h2>
+
+                                {/* Image Section Switcher */}
+                                <div className="flex flex-wrap gap-2 mb-8 justify-center px-4 relative z-10">
+                                    <button
+                                        onClick={() => setActiveImageSection('cover')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded border ${activeImageSection === 'cover' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-500 border-zinc-200 hover:border-blue-300'}`}
+                                    >
+                                        Capa
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveImageSection('backCover')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded border ${activeImageSection === 'backCover' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-500 border-zinc-200 hover:border-blue-300'}`}
+                                    >
+                                        Contracapa
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveImageSection('background')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded border ${activeImageSection === 'background' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-500 border-zinc-200 hover:border-blue-300'}`}
+                                    >
+                                        Fundo (Páginas)
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-col gap-8 h-full">
+
+                                    {/* Cover Image Upload */}
+                                    {activeImageSection === 'cover' && (
+                                        <div className="mt-4 space-y-4 animate-fade-in">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                                    <Image size={18} className="text-blue-500" />
+                                                    Capa Personalizada
+                                                </h3>
+                                                {localTexts.coverImage && (
+                                                    <button
+                                                        onClick={() => handleRemoveImage('coverImage')}
+                                                        className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                                                    >
+                                                        <Trash2 size={12} /> Remover
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className={`relative w-full aspect-[21/29.7] rounded-lg border-2 border-dashed ${localTexts.coverImage ? 'border-transparent' : 'border-zinc-300 hover:border-blue-400'} flex flex-col items-center justify-center transition-all bg-zinc-50 overflow-hidden group`}>
+                                                {localTexts.coverImage ? (
+                                                    <>
+                                                        <img src={localTexts.coverImage} alt="Capa" className="absolute inset-0 w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <label className="cursor-pointer bg-white text-zinc-800 px-4 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 transition-transform">
+                                                                Trocar Imagem
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'coverImage')} />
+                                                            </label>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <label className="cursor-pointer flex flex-col items-center gap-2 p-8 text-zinc-400 hover:text-blue-500 w-full h-full justify-center">
+                                                        {isUploading === 'coverImage' ? (
+                                                            <Loader2 className="animate-spin" size={32} />
+                                                        ) : (
+                                                            <>
+                                                                <Upload size={32} />
+                                                                <span className="text-sm font-medium">Clique para enviar imagem (A4 Vertical)</span>
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'coverImage')} />
+                                                            </>
+                                                        )}
+                                                    </label>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Back Cover Image Upload */}
+                                    {activeImageSection === 'backCover' && (
+                                        <div className="space-y-4 mt-4 animate-fade-in">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                                    <Image size={18} className="text-blue-500" />
+                                                    Contracapa Personalizada (Última Página)
+                                                </h3>
+                                                {localTexts.backCoverImage && (
+                                                    <button
+                                                        onClick={() => handleRemoveImage('backCoverImage')}
+                                                        className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                                                    >
+                                                        <Trash2 size={12} /> Remover
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className={`relative w-full aspect-[21/29.7] rounded-lg border-2 border-dashed ${localTexts.backCoverImage ? 'border-transparent' : 'border-zinc-300 hover:border-blue-400'} flex flex-col items-center justify-center transition-all bg-zinc-50 overflow-hidden group`}>
+                                                {localTexts.backCoverImage ? (
+                                                    <>
+                                                        <img src={localTexts.backCoverImage} alt="Contracapa" className="absolute inset-0 w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <label className="cursor-pointer bg-white text-zinc-800 px-4 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 transition-transform">
+                                                                Trocar Imagem
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'backCoverImage')} />
+                                                            </label>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <label className="cursor-pointer flex flex-col items-center gap-2 p-8 text-zinc-400 hover:text-blue-500 w-full h-full justify-center">
+                                                        {isUploading === 'backCoverImage' ? (
+                                                            <Loader2 className="animate-spin" size={32} />
+                                                        ) : (
+                                                            <>
+                                                                <Upload size={32} />
+                                                                <span className="text-sm font-medium">Clique para enviar imagem (A4 Vertical)</span>
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'backCoverImage')} />
+                                                            </>
+                                                        )}
+                                                    </label>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Background Image Upload */}
+                                    {activeImageSection === 'background' && (
+                                        <div className="space-y-4 mt-4 pb-8 animate-fade-in">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                                    <Image size={18} className="text-blue-500" />
+                                                    Fundo das Páginas
+                                                </h3>
+                                                {localTexts.backgroundImage && (
+                                                    <button
+                                                        onClick={() => handleRemoveImage('backgroundImage')}
+                                                        className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                                                    >
+                                                        <Trash2 size={12} /> Remover
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-zinc-500 -mt-2">Substitui o Cabeçalho e Rodapé padrão em todas as páginas de conteúdo.</p>
+
+                                            <div className={`relative w-full aspect-[21/29.7] rounded-lg border-2 border-dashed ${localTexts.backgroundImage ? 'border-transparent' : 'border-zinc-300 hover:border-blue-400'} flex flex-col items-center justify-center transition-all bg-zinc-50 overflow-hidden group`}>
+                                                {localTexts.backgroundImage ? (
+                                                    <>
+                                                        <img src={localTexts.backgroundImage} alt="Fundo" className="absolute inset-0 w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <label className="cursor-pointer bg-white text-zinc-800 px-4 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 transition-transform">
+                                                                Trocar Imagem
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'backgroundImage')} />
+                                                            </label>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <label className="cursor-pointer flex flex-col items-center gap-2 p-8 text-zinc-400 hover:text-blue-500 w-full h-full justify-center">
+                                                        {isUploading === 'backgroundImage' ? (
+                                                            <Loader2 className="animate-spin" size={32} />
+                                                        ) : (
+                                                            <>
+                                                                <Upload size={32} />
+                                                                <span className="text-sm font-medium">Clique para enviar imagem (Fundo A4)</span>
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'backgroundImage')} />
+                                                            </>
+                                                        )}
+                                                    </label>
+                                                )}
+                                            </div>
+
+
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Margin Configuration (Always Visible in Images Tab) */}
+                                <div className="mt-8 pt-6 border-t font-sans animate-fade-in">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="font-bold text-zinc-800 flex items-center gap-2 text-sm">
+                                            <SlidersHorizontal size={18} className="text-blue-500" />
+                                            Margem do Conteúdo (Páginas Internas)
+                                        </label>
+                                        <span className="text-sm font-mono bg-zinc-100 px-2 py-1 rounded text-zinc-600 border border-zinc-200">
+                                            {localTexts.margin || 40}px
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-zinc-500 mb-4">Ajuste a margem lateral para encaixar o texto caso seu fundo tenha bordas.</p>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        value={localTexts.margin || 40}
+                                        onChange={(e) => setLocalTexts(prev => ({ ...prev, margin: parseInt(e.target.value) }))}
+                                        className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-zinc-400 mt-1">
+                                        <span>0px</span>
+                                        <span>50px</span>
+                                        <span>100px</span>
+                                    </div>
+                                </div>
+                            </>
+                        ) : activeTab === 'institutional' ? (
                             <>
                                 <h2 className="text-zinc-300 font-bold text-center mb-12 uppercase tracking-widest text-[10px] top-4 absolute w-full left-0">--- PÁGINA 2: INSTITUCIONAL ---</h2>
 

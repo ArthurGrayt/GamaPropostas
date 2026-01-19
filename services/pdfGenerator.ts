@@ -40,6 +40,24 @@ export interface PdfOptions {
   introEsocial?: string;
   introTreinamentos?: string;
   introServicosSST?: string;
+  customCoverUrl?: string;
+  customBackgroundUrl?: string;
+  customBackCoverUrl?: string;
+  customMargin?: number;
+  customMarginTop?: number;
+  customMarginBottom?: number;
+}
+
+// Helper to fetch and convert image to Base64 for jsPDF
+async function fetchImageToBase64(url: string): Promise<string> {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 // --- PDF Builder Class (Dynamic Content Only) ---
@@ -54,9 +72,14 @@ class DynamicContentBuilder {
   private customHeaderTitle?: string;
   private customProposalPrefix?: string;
   private customTableHeaders?: { col1: string; col2: string; col3: string };
-  private customObservationLabel?: string;
 
-  constructor(proposal: EnrichedProposal, options: PdfOptions) {
+  private customObservationLabel?: string;
+  private customBackgroundBase64?: string;
+  private margin: number;
+  private marginTop: number;
+  private marginBottom: number;
+
+  constructor(proposal: EnrichedProposal, options: PdfOptions, customBackgroundBase64?: string) {
     this.doc = new jsPDF('p', 'pt', 'a4');
     this.proposal = proposal;
     this.moduleObservations = options.moduleObservations || {};
@@ -73,7 +96,29 @@ class DynamicContentBuilder {
     (this as any).introDocumentos = options.introDocumentos;
     (this as any).introEsocial = options.introEsocial;
     (this as any).introTreinamentos = options.introTreinamentos;
+
     (this as any).introServicosSST = options.introServicosSST;
+    this.customBackgroundBase64 = customBackgroundBase64;
+    this.margin = options.customMargin || MARGIN;
+    this.marginTop = options.customMarginTop || MARGIN;
+    this.marginBottom = options.customMarginBottom || MARGIN;
+  }
+
+  private drawBackground() {
+    if (this.customBackgroundBase64) {
+      const width = this.doc.internal.pageSize.getWidth();
+      const height = this.doc.internal.pageSize.getHeight();
+      try {
+        this.doc.addImage(this.customBackgroundBase64, 'PNG', 0, 0, width, height);
+      } catch (e) {
+        // Fallback if format is not detected or supported, try JPEG
+        try {
+          this.doc.addImage(this.customBackgroundBase64, 'JPEG', 0, 0, width, height);
+        } catch (e2) {
+          console.warn("Could not add background image", e2);
+        }
+      }
+    }
   }
 
   public build(): Uint8Array {
@@ -84,6 +129,9 @@ class DynamicContentBuilder {
     // However, jsPDF starts with 1 page. We will use this page for the first module.
 
     let currentPageNumber = 3; // The first module page will be Page 3 in the final doc
+
+    // Draw Background on the very first page of this doc (which corresponds to Page 3)
+    this.drawBackground();
 
     // Define modules order and Names
     const modules: { title: string; searchKeywords: string[] }[] = [
@@ -134,6 +182,7 @@ class DynamicContentBuilder {
     moduleConfigs.forEach((mod, index) => {
       if (index > 0) {
         this.doc.addPage();
+        this.drawBackground();
       }
       this.drawModule(mod, currentPageNumber, index === 0);
       currentPageNumber++;
@@ -148,20 +197,25 @@ class DynamicContentBuilder {
   private drawModule(module: ModuleConfig, basePageNumber: number, isFirstModule: boolean): void {
     const startPage = this.doc.getNumberOfPages();
     this.pageLabels.set(startPage, basePageNumber.toString());
-
     const pageWidth = this.doc.internal.pageSize.width;
-    let yPos = MARGIN * 2;
+
+    // START Y logic based on Margin Top
+    // If it's the very first page (Page 3), we might want a bit more space or exactly margin top
+    let yPos = this.marginTop + 20;
 
     // "O que será feito :" - Only on the very first dynamic page (Page 3)
     if (isFirstModule) {
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(16);
       this.doc.setTextColor('#000000');
-      this.doc.text(this.customHeaderTitle || 'O que será feito :', MARGIN, yPos);
+      this.doc.text(this.customHeaderTitle || 'O que será feito :', this.margin, yPos);
       yPos += 40;
     } else {
-      // Add some top spacing for subsequent module pages
-      yPos += 20;
+      // Just margin top for subsequent modules?
+      // Actually if we add a new page manually, y resets to margin top?
+      // Wait, 'yPos' here determines where we START drawing on THIS page.
+      // If we called addPage, we should reset yPos to marginTop.
+      yPos = this.marginTop + 20;
     }
 
     // Module Title (Centered "PROPOSTA [NOME]")
@@ -209,8 +263,8 @@ class DynamicContentBuilder {
       this.doc.setFontSize(10);
       this.doc.setTextColor('#333333');
 
-      const splitText = this.doc.splitTextToSize(introText, pageWidth - (MARGIN * 2));
-      this.doc.text(splitText, MARGIN, yPos);
+      const splitText = this.doc.splitTextToSize(introText, pageWidth - (this.margin * 2));
+      this.doc.text(splitText, this.margin, yPos);
       const textHeight = this.doc.getTextDimensions(splitText).h;
       yPos += textHeight + 20;
     }
@@ -247,7 +301,8 @@ class DynamicContentBuilder {
         1: {},
         2: { width: 100, halign: 'right' }
       },
-      margin: { left: MARGIN, right: MARGIN, bottom: MARGIN + 20 },
+      // IMPORTANT: Bottom margin ensures table breaks page automatically if not enough space
+      margin: { left: this.margin, right: this.margin, top: this.marginTop, bottom: this.marginBottom + 20 },
       didDrawPage: (data: any) => {
         const currentPage = this.doc.getNumberOfPages();
         if (currentPage > startPage) {
@@ -262,35 +317,40 @@ class DynamicContentBuilder {
     // We get the final y position from autoTable
     const finalY = (this.doc as any).lastAutoTable.finalY + 20;
     const obsText = this.moduleObservations[module.title];
+    let currentY: number;
 
     if (obsText && obsText.trim() !== '') {
       // Check for page break if needed (simple check)
       const pageHeight = this.doc.internal.pageSize.height;
-      if (finalY > pageHeight - MARGIN - 50) {
+      if (finalY > pageHeight - this.marginBottom - 50) {
         this.doc.addPage();
-        // Reset Y for new page? No, autoTable usually handles table breaks, but post-table content is manual.
-        // If we added a page, y starts at margin.
-        // However, implementing robust multi-page observation printing is complex. 
-        // For now, we print starting at finalY, and if it overflows, jsPDF might clip or we'd need splitText logic.
-        // Let's assume standard short observations for now, or add simple page check.
+        this.drawBackground();
+        // Reset Y for new page
+        currentY = this.marginTop + 20;
+      } else {
+        currentY = finalY;
       }
 
-      // Use correct Y (if we added page, it would be different, but let's stick to flow for this iteration)
-      let currentY = finalY;
+      // If we reset, finalY is irrelevant, we use currentY.
 
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
       this.doc.setTextColor('#333333');
-      this.doc.text(this.customObservationLabel || 'Observação:', MARGIN, currentY);
+      this.doc.text(this.customObservationLabel || 'Observação:', this.margin, currentY);
       currentY += 15;
 
       this.doc.setFont('helvetica', 'normal');
-      const splitObs = this.doc.splitTextToSize(obsText, pageWidth - (MARGIN * 2));
-      this.doc.text(splitObs, MARGIN, currentY);
+      const splitObs = this.doc.splitTextToSize(obsText, pageWidth - (this.margin * 2));
+      this.doc.text(splitObs, this.margin, currentY);
     }
   }
 
   private applyFooters(): void {
+    // If using custom background, we might want to skip standard footers?
+    // User requirement: "usar esse fundo em todas" replacing footer/header.
+    // So if custom background is present, we DO NOT draw the standard footer box.
+    if (this.customBackgroundBase64) return;
+
     const totalPages = this.doc.getNumberOfPages();
     const A4_WIDTH = 595.28;
     const A4_HEIGHT = 841.89;
@@ -315,10 +375,7 @@ class DynamicContentBuilder {
   }
 }
 
-export interface PdfOptions {
-  companyNameType: 'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA';
-  customCompanyName?: string; // If 'custom' is needed later, or we pass the resolved string directly
-}
+
 
 export const generateProposalPdf = async (proposal: EnrichedProposal, options?: PdfOptions): Promise<void> => {
   try {
@@ -330,6 +387,13 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
       } else if (options.companyNameType === 'NOME_FANTASIA' && proposal.cliente.nome_fantasia) {
         companyName = proposal.cliente.nome_fantasia;
       }
+    }
+
+    console.log("Generating PDF with Options:", options);
+    if (options) {
+      console.log("Custom Cover URL:", options.customCoverUrl);
+      console.log("Custom Background URL:", options.customBackgroundUrl);
+      console.log("Custom Back Cover URL:", options.customBackCoverUrl);
     }
 
     // FILTER ITEMS - KEEP ONLY APPROVED
@@ -355,8 +419,17 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
 
 
     // 3. Generate Dynamic Content (Modules)
-    // 7. Build Dynamic Content (Modules + Footers)
-    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf, options || { companyNameType: 'NOME' });
+    // Prepare Background Base64 if needed
+    let bgBase64 = undefined;
+    if (options && options.customBackgroundUrl) {
+      try {
+        bgBase64 = await fetchImageToBase64(options.customBackgroundUrl);
+      } catch (e) {
+        console.error("Failed to fetch custom background", e);
+      }
+    }
+
+    const dynamicBuilder = new DynamicContentBuilder(proposalForPdf, options || { companyNameType: 'NOME' }, bgBase64);
     const dynamicContentBytes = dynamicBuilder.build();
     const dynamicDoc = await PDFDocument.load(dynamicContentBytes);
 
@@ -366,15 +439,46 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     // 5. Assemble Pages
 
     // A. Front Cover (Image)
-    // A. Front Cover (Image)
-    const coverBytes = await fetch('/cover_page.jpg').then(res => {
-      if (!res.ok) throw new Error('Failed to load cover_page.jpg');
-      return res.arrayBuffer();
-    });
-    const coverImage = await finalDoc.embedJpg(coverBytes);
+    let coverBytes: ArrayBuffer;
+    if (options && options.customCoverUrl) {
+      try {
+        const res = await fetch(options.customCoverUrl);
+        if (!res.ok) throw new Error('Failed to load custom cover');
+        coverBytes = await res.arrayBuffer();
+      } catch (e) {
+        console.error("Using default cover due to error:", e);
+        coverBytes = await fetch('/cover_page.jpg').then(res => res.arrayBuffer());
+      }
+    } else {
+      coverBytes = await fetch('/cover_page.jpg').then(res => res.arrayBuffer());
+    }
+
+    let coverImage: any;
+    try {
+      // Try JPG first as default is JPG
+      coverImage = await finalDoc.embedJpg(coverBytes);
+    } catch {
+      try {
+        coverImage = await finalDoc.embedPng(coverBytes);
+      } catch (e) {
+        console.error("Could not embed cover image (format not supported?)", e);
+        // Fallback to default if custom failed? Or just leave null?
+        // If we are here, likely the custom image failed.
+        // Let's rely on previous fallback logic or just error out.
+      }
+    }
+
+    if (!coverImage) {
+      // Fallback to default if custom failed completely logic above handles fetching bytes, 
+      // but if bytes are invalid, we might need a safety net.
+      // For now, assuming bytes are valid image data.
+    }
+
     const coverPage = finalDoc.addPage();
     const { width: cpWidth, height: cpHeight } = coverPage.getSize();
-    coverPage.drawImage(coverImage, { x: 0, y: 0, width: cpWidth, height: cpHeight });
+    if (coverImage) {
+      coverPage.drawImage(coverImage, { x: 0, y: 0, width: cpWidth, height: cpHeight });
+    }
 
     // --- ADD CLICKABLE LINKS ---
     // Coordinates (Bottom-Left logic): [xMin, yMin, xMax, yMax]
@@ -422,10 +526,24 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     introDoc.setFillColor(255, 255, 255);
     introDoc.rect(0, 0, pageWidth, pageHeight, 'F');
 
+    // Draw Custom Background for Intro Page
+    if (bgBase64) {
+      try {
+        introDoc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+      } catch (e) {
+        try { introDoc.addImage(bgBase64, 'JPEG', 0, 0, pageWidth, pageHeight); } catch (e2) { }
+      }
+    }
+
     // --- Layout Logic ---
     let y = 60;
-    const leftColX = MARGIN;
-    const colWidth = (pageWidth - (MARGIN * 3)) / 2; // split page roughly? Or vertically stacked?
+    // We didn't pass options.customMargin into this function scope yet, we need it.
+    // Actually DynamicContentBuilder has it, but this is 'generateProposalPdf' function scope.
+    // We should use options.customMargin here too.
+    const customMargin = options?.customMargin || MARGIN;
+
+    // const leftColX = MARGIN; // Replacing
+    const colWidth = (pageWidth - (customMargin * 3)) / 2; // split page roughly? Or vertically stacked?
     // User requested: "Quem somos", "Quem é nosso time", "Por que escolher". 
     // Usually these are vertically stacked or in a grid. Let's stack them for safety, or mimicking a specific layout.
     // Let's assume a clean vertical layout with proper spacing.
@@ -434,35 +552,35 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     introDoc.setFont('helvetica', 'bold');
     introDoc.setFontSize(14);
     introDoc.setTextColor(PRIMARY_COLOR);
-    introDoc.text(options?.whoWeAreTitle || "QUEM SOMOS", MARGIN, y);
+    introDoc.text(options?.whoWeAreTitle || "QUEM SOMOS", customMargin, y);
     y += 20;
 
     introDoc.setFont('helvetica', 'normal');
     introDoc.setFontSize(10);
     introDoc.setTextColor('#333333');
     const whoText = options?.whoWeAreText || "";
-    const splitWho = introDoc.splitTextToSize(whoText, pageWidth - (MARGIN * 2));
-    introDoc.text(splitWho, MARGIN, y);
+    const splitWho = introDoc.splitTextToSize(whoText, pageWidth - (customMargin * 2));
+    introDoc.text(splitWho, customMargin, y);
     y += introDoc.getTextDimensions(splitWho).h + 30;
 
     // 2. Quem é Nosso Time
     introDoc.setFont('helvetica', 'bold');
     introDoc.setFontSize(14);
     introDoc.setTextColor(PRIMARY_COLOR);
-    introDoc.text(options?.ourTeamTitle || "Quem é nosso time?", MARGIN, y);
+    introDoc.text(options?.ourTeamTitle || "Quem é nosso time?", customMargin, y);
     y += 20;
 
     // Team Columns Logic
     const colGap = 10;
-    const teamColWidth = (pageWidth - (MARGIN * 2) - colGap) / 2;
-    const col2X = MARGIN + teamColWidth + colGap;
+    const teamColWidth = (pageWidth - (customMargin * 2) - colGap) / 2;
+    const col2X = customMargin + teamColWidth + colGap;
 
     // Col 1 Header (Gray Bg)
     introDoc.setFillColor(234, 234, 234); // #EAEAEA
-    introDoc.rect(MARGIN, y, teamColWidth, 20, 'F');
+    introDoc.rect(customMargin, y, teamColWidth, 20, 'F');
     introDoc.setFontSize(10);
     introDoc.setTextColor('#000000');
-    introDoc.text(options?.teamCol1Title || "Segurança do trabalho", MARGIN + 5, y + 14);
+    introDoc.text(options?.teamCol1Title || "Segurança do trabalho", customMargin + 5, y + 14);
 
     // Col 2 Header (Gray Bg)
     introDoc.rect(col2X, y, teamColWidth, 20, 'F');
@@ -477,7 +595,7 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     // Note: User input usually uses newlines. We should arguably split by newlines to ensure bullets align?
     // jsPDF splitTextToSize handles newlines well.
     const splitCol1 = introDoc.splitTextToSize(col1Text, teamColWidth - 10);
-    introDoc.text(splitCol1, MARGIN + 5, y);
+    introDoc.text(splitCol1, customMargin + 5, y);
 
     // Col 2 Content
     const col2Text = options?.teamCol2Text || "";
@@ -493,25 +611,30 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     introDoc.setFont('helvetica', 'bold');
     introDoc.setFontSize(14);
     introDoc.setTextColor(PRIMARY_COLOR);
-    introDoc.text(options?.whyChooseTitle || "Por que escolher a Gama Center?", MARGIN, y);
+    introDoc.text(options?.whyChooseTitle || "Por que escolher a Gama Center?", customMargin, y);
     y += 20;
 
     introDoc.setFont('helvetica', 'normal');
     introDoc.setFontSize(10);
     introDoc.setTextColor('#333333');
     const whyText = options?.whyChooseText || "";
-    const splitWhy = introDoc.splitTextToSize(whyText, pageWidth - (MARGIN * 2));
-    introDoc.text(splitWhy, MARGIN, y);
+    const splitWhy = introDoc.splitTextToSize(whyText, pageWidth - (customMargin * 2));
+    introDoc.text(splitWhy, customMargin, y);
 
-    // Add Footer to this page too? Usually Intro pages have footers.
-    const introLabel = "2"; // Usually Page 2
-    introDoc.setFontSize(8);
-    introDoc.setTextColor('#888888');
-    const footerTxt = options?.customFooter !== undefined ? options.customFooter : `Gama Center SST - 2025 - Página ${introLabel}`;
-    const txtWidth = introDoc.getStringUnitWidth(footerTxt) * 8 / introDoc.internal.scaleFactor;
-    const fx = (pageWidth - txtWidth) / 2;
-    const fy = pageHeight - 20;
-    introDoc.text(footerTxt, fx, fy);
+
+    // Footer Logic for Intro Page (Skip if using custom background as it likely includes it)
+    if (!bgBase64) {
+      // Add Footer to this page too? Usually Intro pages have footers.
+      const introLabel = "2"; // Usually Page 2
+      introDoc.setFontSize(8);
+      introDoc.setTextColor('#888888');
+      const footerTxt = options?.customFooter !== undefined ? options.customFooter : `Gama Center SST - 2025 - Página ${introLabel}`;
+      const txtWidth = introDoc.getStringUnitWidth(footerTxt) * 8 / introDoc.internal.scaleFactor;
+      const fx = (pageWidth - txtWidth) / 2;
+      const fy = pageHeight - 20;
+
+      introDoc.text(footerTxt, fx, fy);
+    }
 
     // Convert to PDF-Lib and Add
     const introBytes = new Uint8Array(introDoc.output('arraybuffer'));
@@ -527,21 +650,46 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     }
 
     // D. Back Cover (Image)
-    const backCoverBytes = await fetch('/back_cover.png').then(res => {
-      if (!res.ok) throw new Error('Failed to load back_cover.png');
-      return res.arrayBuffer();
-    });
+    // D. Back Cover (Image)
+    let backCoverBytes: ArrayBuffer;
+    if (options && options.customBackCoverUrl) {
+      try {
+        const res = await fetch(options.customBackCoverUrl);
+        if (!res.ok) throw new Error('Failed to load custom back cover');
+        backCoverBytes = await res.arrayBuffer();
+      } catch (e) {
+        console.warn("Using default back cover due to error:", e);
+        backCoverBytes = await fetch('/back_cover.png').then(res => res.arrayBuffer());
+      }
+    } else {
+      backCoverBytes = await fetch('/back_cover.png').then(res => res.arrayBuffer());
+    }
 
-    const backCoverImage = await finalDoc.embedPng(backCoverBytes);
-    const backCoverPage = finalDoc.addPage();
-    const { width: pgWidth, height: pgHeight } = backCoverPage.getSize();
+    // Attempt to detect if PNG or JPG
+    let backCoverImage: any;
+    try {
+      // Optimistically try PNG first as default is PNG
+      backCoverImage = await finalDoc.embedPng(backCoverBytes);
+    } catch {
+      // If fail, try JPG
+      try {
+        backCoverImage = await finalDoc.embedJpg(backCoverBytes);
+      } catch (e) {
+        console.error("Could not embed back cover", e);
+        backCoverImage = null; // Skip if fails
+      }
+    }
 
-    backCoverPage.drawImage(backCoverImage, {
-      x: 0,
-      y: 0,
-      width: pgWidth,
-      height: pgHeight,
-    });
+    if (backCoverImage) {
+      const backCoverPage = finalDoc.addPage();
+      const { width: pgWidth, height: pgHeight } = backCoverPage.getSize();
+      backCoverPage.drawImage(backCoverImage, {
+        x: 0,
+        y: 0,
+        width: pgWidth,
+        height: pgHeight,
+      });
+    }
 
     // 6. Save
     const pdfBytes = await finalDoc.save();

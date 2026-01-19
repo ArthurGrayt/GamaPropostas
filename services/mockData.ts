@@ -798,6 +798,7 @@ export const updateProposalClient = async (proposalId: number, newClientId: stri
 };
 
 export const createDocSeg = async (docSeg: any) => {
+
   const { data, error } = await supabase
     .from('doc_seg')
     .insert([docSeg])
@@ -902,5 +903,31 @@ export const updateClientModality = async (clientId: string, modality: string): 
   } catch (error) {
     console.error("Error updating client modality:", error);
     return false;
+  }
+};
+
+export const uploadPdfAsset = async (file: File): Promise<{ publicUrl: string | null; error: string | null }> => {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+    const filePath = `pdf-assets/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents') // Assuming 'documents' bucket exists and is public/accessible
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error('Error uploading PDF asset:', uploadError);
+      return { publicUrl: null, error: uploadError.message || JSON.stringify(uploadError) };
+    }
+
+    const { data } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    return { publicUrl: data.publicUrl, error: null };
+  } catch (error: any) {
+    console.error('Exception uploading PDF asset:', error);
+    return { publicUrl: null, error: error.message || String(error) };
   }
 };

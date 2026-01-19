@@ -45,6 +45,12 @@ Todos os exames são realizados em nosso espaço da Clínica Gama Center, inclui
   introEsocial: '',
   introTreinamentos: '',
   introServicosSST: '',
+  coverImage: undefined,
+  backgroundImage: undefined,
+  backCoverImage: undefined,
+  margin: 40,
+  marginTop: 40,
+  marginBottom: 40,
 };
 
 // Main Content Component (Protected)
