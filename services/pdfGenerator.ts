@@ -51,6 +51,7 @@ export interface PdfOptions {
   footer?: string;
   coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
   customAcceptanceLink?: string;
+  moduleTotals?: Record<string, boolean>;
 }
 
 // Helper to fetch and convert image to Base64 for jsPDF
@@ -85,6 +86,14 @@ class DynamicContentBuilder {
   private marginBottom: number;
   private options: PdfOptions;
 
+  // New properties to replace (this as any) usage
+  private introExames?: string;
+  private introDocumentos?: string;
+  private introEsocial?: string;
+  private introTreinamentos?: string;
+  private introServicosSST?: string;
+  private customModuleTitles: Record<string, string> = {};
+
   constructor(proposal: EnrichedProposal, options: PdfOptions, customBackgroundBase64?: string) {
     this.doc = new jsPDF('p', 'pt', 'a4');
     this.proposal = proposal;
@@ -99,13 +108,13 @@ class DynamicContentBuilder {
     this.customObservationLabel = options.customObservationLabel;
 
     // Assign module intros
-    (this as any).introExames = options.introExames;
-    (this as any).introDocumentos = options.introDocumentos;
-    (this as any).introEsocial = options.introEsocial;
-    (this as any).introTreinamentos = options.introTreinamentos;
+    this.introExames = options.introExames;
+    this.introDocumentos = options.introDocumentos;
+    this.introEsocial = options.introEsocial;
+    this.introTreinamentos = options.introTreinamentos;
 
-    (this as any).introServicosSST = options.introServicosSST;
-    (this as any).customModuleTitles = options.customModuleTitles || {};
+    this.introServicosSST = options.introServicosSST;
+    this.customModuleTitles = options.customModuleTitles || {};
     this.customBackgroundBase64 = customBackgroundBase64;
     this.margin = options.customMargin !== undefined ? options.customMargin : MARGIN;
     this.marginTop = options.customMarginTop !== undefined ? options.customMarginTop : MARGIN;
@@ -306,6 +315,19 @@ class DynamicContentBuilder {
       ];
     });
 
+    // Calculate and add Total Row if enabled for this module
+    const shouldShowTotal = this.options.moduleTotals?.[module.title] ?? false;
+
+    if (shouldShowTotal) {
+      const totalValue = module.items.reduce((sum, item) => sum + (item.preco || 0), 0);
+      const totalFormatted = totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      tableBody.push([
+        '',
+        '',
+        `VALOR TOTAL : ${totalFormatted}`
+      ]);
+    }
+
     // Draw Table
     const headers = [
       this.customTableHeaders?.col1 || 'ITEM',
@@ -327,6 +349,29 @@ class DynamicContentBuilder {
       },
       // IMPORTANT: Bottom margin ensures table breaks page automatically if not enough space
       margin: { left: this.margin, right: this.margin, top: this.marginTop, bottom: this.marginBottom + 20 },
+      didParseCell: (data: any) => {
+        // Explicitly align the header of the last column (Valor Unitário) to the right
+        if (data.section === 'head' && data.column.index === 2) {
+          data.cell.styles.halign = 'right';
+        }
+
+        // Check if this is the module total row
+        if (data.section === 'body' && shouldShowTotal && data.row.index === tableBody.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.lineWidth = 0;
+          // If the cell is empty (the first two columns), we explicitly ensure no borders 
+          // but lineWidth 0 usually handles it.
+        }
+      },
+      didDrawCell: (data: any) => {
+        // Manually draw top border for the total row to "close" the table above
+        if (data.section === 'body' && shouldShowTotal && data.row.index === tableBody.length - 1) {
+          const doc = data.doc;
+          doc.setDrawColor('#CCCCCC');
+          doc.setLineWidth(0.1);
+          doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
+        }
+      },
       didDrawPage: (data: any) => {
         const currentPage = this.doc.getNumberOfPages();
         if (currentPage > startPage) {
@@ -435,7 +480,7 @@ class DynamicContentBuilder {
 
     // 1. Validity Text
     this.doc.setFont('helvetica', 'normal');
-    this.doc.setFontSize(10);
+    this.doc.setFontSize(12);
     this.doc.setTextColor('#333333');
     const validityText = "Esta proposta possui validade de 15 dias";
     const valWidth = this.doc.getTextWidth(validityText);
@@ -443,19 +488,19 @@ class DynamicContentBuilder {
 
     // 2. Acceptance Link
     this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(12);
+    this.doc.setFontSize(14);
     // PRIMARY_COLOR constant is outside class, ensure it's imported/available or use literal
     this.doc.setTextColor('#008080'); // Hardcoded primary teal to be safe
     const acceptText = "Clique aqui para aceitar a proposta";
     const acceptWidth = this.doc.getTextWidth(acceptText);
     const acceptX = (pageWidth - acceptWidth) / 2;
-    const acceptY = closingY + 20;
+    const acceptY = closingY + 25;
 
     this.doc.text(acceptText, acceptX, acceptY);
 
     // Add Link Annotation
     const linkUrl = this.options.customAcceptanceLink || 'https://gamacentersst.com.br/aceitar';
-    this.doc.link(acceptX, acceptY - 12, acceptWidth, 15, { url: linkUrl });
+    this.doc.link(acceptX, acceptY - 14, acceptWidth, 18, { url: linkUrl });
   }
 }
 

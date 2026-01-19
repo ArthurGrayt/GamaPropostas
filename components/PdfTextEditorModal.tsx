@@ -34,7 +34,9 @@ interface PdfTexts {
     marginTop?: number;
     marginBottom?: number;
     customModuleTitles?: Record<string, string>;
+
     coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
+    moduleTotals?: Record<string, boolean>;
 }
 
 interface PdfTextEditorModalProps {
@@ -729,6 +731,26 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                                         <p className="text-[10px]">(Gerada automaticamente com os itens)</p>
                                     </div>
                                 </div>
+
+                                <label className="flex items-center justify-center gap-2 mt-4 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={localTexts.moduleTotals?.[activeModule] ?? false}
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setLocalTexts(prev => ({
+                                                ...prev,
+                                                moduleTotals: {
+                                                    ...prev.moduleTotals,
+                                                    [activeModule]: checked,
+                                                    [activeModule.toUpperCase()]: checked
+                                                }
+                                            }));
+                                        }}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs font-bold text-zinc-600">Mostrar Valor Total deste Módulo</span>
+                                </label>
 
                             </>
                         )}

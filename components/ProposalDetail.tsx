@@ -391,9 +391,11 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
     // PDF Generation State
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES'>('NOMENCLATURA');
+    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES' | 'VALORES'>('NOMENCLATURA');
     const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
+
     const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
+    const [pdfModuleTotals, setPdfModuleTotals] = useState<Record<string, boolean>>({});
 
     const [pdfShowItemObservations, setPdfShowItemObservations] = useState(false);
 
@@ -440,6 +442,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 customHeaderTitle: pdfTexts.headerTitle,
                 customProposalPrefix: pdfTexts.proposalPrefix,
                 customTableHeaders: pdfTexts.tableHeaders,
+                moduleTotals: pdfModuleTotals,
                 customObservationLabel: pdfTexts.observationLabel,
                 customAcceptanceLink: `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`,
                 // Institutional
@@ -1514,6 +1517,13 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                     Observações por Módulo
                                     {configTab === 'OBSERVACOES' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
                                 </button>
+                                <button
+                                    onClick={() => setConfigTab('VALORES')}
+                                    className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'VALORES' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
+                                >
+                                    Valores dos Módulos
+                                    {configTab === 'VALORES' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
+                                </button>
                             </div>
 
                             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
@@ -1615,6 +1625,30 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                                         className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[80px] text-sm dark:text-white"
                                                     />
                                                 </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {configTab === 'VALORES' && (
+                                    <div className="space-y-6 animate-slide-in">
+                                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                                            Escolha em quais módulos você deseja exibir a linha com o <b>VALOR TOTAL</b> ao final da tabela.
+                                        </p>
+                                        <div className="space-y-3">
+                                            {availableModules.map(moduleTitle => (
+                                                <label key={moduleTitle} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                                    <span className="font-bold text-sm text-zinc-700 dark:text-zinc-300">{moduleTitle}</span>
+                                                    <div className="relative inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only peer"
+                                                            checked={pdfModuleTotals[moduleTitle] || false}
+                                                            onChange={(e) => setPdfModuleTotals(prev => ({ ...prev, [moduleTitle]: e.target.checked }))}
+                                                        />
+                                                        <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                                    </div>
+                                                </label>
                                             ))}
                                         </div>
                                     </div>
