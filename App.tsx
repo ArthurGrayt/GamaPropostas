@@ -51,6 +51,7 @@ Todos os exames são realizados em nosso espaço da Clínica Gama Center, inclui
   margin: 40,
   marginTop: 40,
   marginBottom: 40,
+  customModuleTitles: {},
 };
 
 // Main Content Component (Protected)

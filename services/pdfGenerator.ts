@@ -46,6 +46,7 @@ export interface PdfOptions {
   customMargin?: number;
   customMarginTop?: number;
   customMarginBottom?: number;
+  customModuleTitles?: Record<string, string>;
 }
 
 // Helper to fetch and convert image to Base64 for jsPDF
@@ -98,10 +99,19 @@ class DynamicContentBuilder {
     (this as any).introTreinamentos = options.introTreinamentos;
 
     (this as any).introServicosSST = options.introServicosSST;
+    (this as any).customModuleTitles = options.customModuleTitles || {};
     this.customBackgroundBase64 = customBackgroundBase64;
-    this.margin = options.customMargin || MARGIN;
-    this.marginTop = options.customMarginTop || MARGIN;
-    this.marginBottom = options.customMarginBottom || MARGIN;
+    this.margin = options.customMargin !== undefined ? options.customMargin : MARGIN;
+    this.marginTop = options.customMarginTop !== undefined ? options.customMarginTop : MARGIN;
+    this.marginBottom = options.customMarginBottom !== undefined ? options.customMarginBottom : MARGIN;
+
+    // Monkey-patch addPage to always draw background (fixes autoTable pages)
+    const originalAddPage = this.doc.addPage.bind(this.doc);
+    (this.doc as any).addPage = (...args: any[]) => {
+      const result = originalAddPage.apply(this.doc, args);
+      this.drawBackground();
+      return result;
+    };
   }
 
   private drawBackground() {
@@ -182,7 +192,6 @@ class DynamicContentBuilder {
     moduleConfigs.forEach((mod, index) => {
       if (index > 0) {
         this.doc.addPage();
-        this.drawBackground();
       }
       this.drawModule(mod, currentPageNumber, index === 0);
       currentPageNumber++;
@@ -222,9 +231,14 @@ class DynamicContentBuilder {
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(14);
     this.doc.setTextColor('#000000');
+
+    // Check for custom title for this specific module
+    const customTitle = (this as any).customModuleTitles?.[module.title];
     const prefix = this.customProposalPrefix !== undefined ? this.customProposalPrefix : 'PROPOSTA';
-    // Handle empty prefix gracefully
-    const fullTitle = prefix ? `${prefix} ${module.title}` : module.title;
+
+    // Use custom title if exists, otherwise fallback to Default Prefix + Module Title
+    const fullTitle = customTitle !== undefined ? customTitle : (prefix ? `${prefix} ${module.title}` : module.title);
+
     this.doc.text(fullTitle, pageWidth / 2, yPos, { align: 'center' });
     yPos += 20;
 
@@ -324,7 +338,6 @@ class DynamicContentBuilder {
       const pageHeight = this.doc.internal.pageSize.height;
       if (finalY > pageHeight - this.marginBottom - 50) {
         this.doc.addPage();
-        this.drawBackground();
         // Reset Y for new page
         currentY = this.marginTop + 20;
       } else {
@@ -536,11 +549,11 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     }
 
     // --- Layout Logic ---
-    let y = 60;
-    // We didn't pass options.customMargin into this function scope yet, we need it.
-    // Actually DynamicContentBuilder has it, but this is 'generateProposalPdf' function scope.
     // We should use options.customMargin here too.
-    const customMargin = options?.customMargin || MARGIN;
+    const customMargin = options?.customMargin !== undefined ? options.customMargin : MARGIN;
+    const customMarginTop = options?.customMarginTop !== undefined ? options.customMarginTop : MARGIN;
+
+    let y = customMarginTop + 20;
 
     // const leftColX = MARGIN; // Replacing
     const colWidth = (pageWidth - (customMargin * 3)) / 2; // split page roughly? Or vertically stacked?

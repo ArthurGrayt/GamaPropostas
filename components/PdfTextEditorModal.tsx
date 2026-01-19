@@ -33,6 +33,7 @@ interface PdfTexts {
     margin?: number;
     marginTop?: number;
     marginBottom?: number;
+    customModuleTitles?: Record<string, string>;
 }
 
 interface PdfTextEditorModalProps {
@@ -51,7 +52,7 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
     defaultTexts
 }) => {
     const [localTexts, setLocalTexts] = useState<PdfTexts>(initialTexts);
-    const [activeTab, setActiveTab] = useState<'institutional' | 'modules' | 'images'>('institutional');
+    const [activeTab, setActiveTab] = useState<'institutional' | 'modules' | 'images' | 'margins'>('institutional');
     const [activeImageSection, setActiveImageSection] = useState<'cover' | 'backCover' | 'background'>('cover');
     const [activeModule, setActiveModule] = useState<'Exames' | 'Documentos' | 'eSocial' | 'Treinamentos' | 'Serviços SST'>('Exames');
     const [isUploading, setIsUploading] = useState<string | null>(null);
@@ -160,6 +161,12 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                             className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'images' ? 'bg-white shadow text-blue-600' : 'text-zinc-500 hover:text-zinc-700'}`}
                         >
                             Imagens
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('margins')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'margins' ? 'bg-white shadow text-blue-600' : 'text-zinc-500 hover:text-zinc-700'}`}
+                        >
+                            Margens
                         </button>
                     </div>
 
@@ -344,31 +351,90 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                                     )}
                                 </div>
 
-                                {/* Margin Configuration (Always Visible in Images Tab) */}
-                                <div className="mt-8 pt-6 border-t font-sans animate-fade-in">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="font-bold text-zinc-800 flex items-center gap-2 text-sm">
-                                            <SlidersHorizontal size={18} className="text-blue-500" />
-                                            Margem do Conteúdo (Páginas Internas)
-                                        </label>
-                                        <span className="text-sm font-mono bg-zinc-100 px-2 py-1 rounded text-zinc-600 border border-zinc-200">
-                                            {localTexts.margin || 40}px
-                                        </span>
+                            </>
+                        ) : activeTab === 'margins' ? (
+                            <>
+                                <h2 className="text-zinc-300 font-bold text-center mb-12 uppercase tracking-widest text-[10px] top-4 absolute w-full left-0">--- CONFIGURAÇÃO DE MARGENS ---</h2>
+
+                                <div className="mt-8 font-sans animate-fade-in px-8">
+                                    <div className="flex items-center gap-2 mb-6 justify-center">
+                                        <SlidersHorizontal size={24} className="text-blue-500" />
+                                        <h3 className="font-bold text-zinc-800 text-lg">Margens do Documento (Páginas Internas)</h3>
                                     </div>
-                                    <p className="text-xs text-zinc-500 mb-4">Ajuste a margem lateral para encaixar o texto caso seu fundo tenha bordas.</p>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        step="5"
-                                        value={localTexts.margin || 40}
-                                        onChange={(e) => setLocalTexts(prev => ({ ...prev, margin: parseInt(e.target.value) }))}
-                                        className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                    />
-                                    <div className="flex justify-between text-[10px] text-zinc-400 mt-1">
-                                        <span>0px</span>
-                                        <span>50px</span>
-                                        <span>100px</span>
+                                    <p className="text-sm text-zinc-500 mb-8 text-center max-w-lg mx-auto">Ajuste as margens para garantir que o conteúdo do texto, tabelas e observações não se sobreponha ao design do seu papel timbrado ou imagem de fundo.</p>
+
+                                    <div className="grid grid-cols-1 gap-10 max-w-md mx-auto">
+                                        {/* Lateral */}
+                                        <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+                                            <div className="flex justify-between mb-2 items-center">
+                                                <label className="text-sm font-bold text-zinc-700 flex items-center gap-2">
+                                                    <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
+                                                    Margens Laterais (Esquerda/Direita)
+                                                </label>
+                                                <span className="text-xs font-mono bg-white border px-2 py-1 rounded text-zinc-600 w-16 text-center">{localTexts.margin || 40}px</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="100"
+                                                step="5"
+                                                value={localTexts.margin || 40}
+                                                onChange={(e) => setLocalTexts(prev => ({ ...prev, margin: parseInt(e.target.value) }))}
+                                                className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mt-2"
+                                            />
+                                            <div className="flex justify-between text-[10px] text-zinc-400 mt-2">
+                                                <span>0px</span>
+                                                <span>100px</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Top */}
+                                        <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+                                            <div className="flex justify-between mb-2 items-center">
+                                                <label className="text-sm font-bold text-zinc-700 flex items-center gap-2">
+                                                    <span className="w-4 h-1 bg-red-500 rounded-full"></span>
+                                                    Margem Superior (Topo)
+                                                </label>
+                                                <span className="text-xs font-mono bg-white border px-2 py-1 rounded text-zinc-600 w-16 text-center">{localTexts.marginTop || 40}px</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="200"
+                                                step="5"
+                                                value={localTexts.marginTop || 40}
+                                                onChange={(e) => setLocalTexts(prev => ({ ...prev, marginTop: parseInt(e.target.value) }))}
+                                                className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-red-600 mt-2"
+                                            />
+                                            <div className="flex justify-between text-[10px] text-zinc-400 mt-2">
+                                                <span>0px</span>
+                                                <span>200px</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Bottom */}
+                                        <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+                                            <div className="flex justify-between mb-2 items-center">
+                                                <label className="text-sm font-bold text-zinc-700 flex items-center gap-2">
+                                                    <span className="w-4 h-1 bg-green-500 rounded-full"></span>
+                                                    Margem Inferior (Rodapé)
+                                                </label>
+                                                <span className="text-xs font-mono bg-white border px-2 py-1 rounded text-zinc-600 w-16 text-center">{localTexts.marginBottom || 40}px</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="200"
+                                                step="5"
+                                                value={localTexts.marginBottom || 40}
+                                                onChange={(e) => setLocalTexts(prev => ({ ...prev, marginBottom: parseInt(e.target.value) }))}
+                                                className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-green-600 mt-2"
+                                            />
+                                            <div className="flex justify-between text-[10px] text-zinc-400 mt-2">
+                                                <span>0px</span>
+                                                <span>200px</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </>
@@ -491,19 +557,35 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                                 </div>
 
                                 {/* 2. Module Title + Client */}
-                                <div className="text-center space-y-2 mb-8">
-                                    <div className="group relative inline-block">
-                                        <div className="flex items-center justify-center gap-1 text-black font-bold text-lg uppercase outline-none">
-                                            <span>
-                                                {localTexts.proposalPrefix || 'PROPOSTA'} {activeModule.toUpperCase()}
-                                            </span>
-                                        </div>
-                                        <label className="absolute -top-5 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                            Edite o prefixo "PROPOSTA" na aba Institucional se desejar
-                                        </label>
+                                <div className="group relative inline-block w-full max-w-2xl px-8">
+                                    <div className="flex items-center justify-center gap-1 text-black font-bold text-lg uppercase outline-none w-full">
+                                        <input
+                                            value={localTexts.customModuleTitles?.[activeModule] !== undefined
+                                                ? localTexts.customModuleTitles[activeModule]
+                                                : `${localTexts.proposalPrefix || 'PROPOSTA'} ${activeModule.toUpperCase()}`}
+                                            onChange={(e) => {
+                                                const newTitle = e.target.value;
+                                                setLocalTexts(prev => ({
+                                                    ...prev,
+                                                    customModuleTitles: {
+                                                        ...prev.customModuleTitles,
+                                                        // We save both TitleCase (for UI persistence if needed) and UpperCase (for PDF Generator match)
+                                                        // Actually, let's just ensure we check both or save consistent keys.
+                                                        // The generator uses 'EXAMES'.
+                                                        [activeModule]: newTitle,
+                                                        [activeModule.toUpperCase()]: newTitle
+                                                    }
+                                                }));
+                                            }}
+                                            className="bg-transparent text-center w-full outline-none border-b border-transparent hover:border-blue-300 focus:border-blue-500 transition-all uppercase placeholder-zinc-300 py-1"
+                                            placeholder="TÍTULO DO MÓDULO"
+                                        />
                                     </div>
-                                    <h3 className="text-black text-base uppercase">[NOME DO CLIENTE]</h3>
+                                    <label className="absolute -top-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[9px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg pointer-events-none">
+                                        Edite o título completo deste módulo (Ex: "ORÇAMENTO {activeModule.toUpperCase()}")
+                                    </label>
                                 </div>
+                                <h3 className="text-black text-base uppercase mt-8">[NOME DO CLIENTE]</h3>
 
                                 {/* 3. Intro Text for this Module */}
                                 <div className="mb-8 group relative rounded-lg border-2 border-transparent hover:border-blue-300 p-2 transition-all">
