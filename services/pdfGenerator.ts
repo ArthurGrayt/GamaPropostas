@@ -617,7 +617,7 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
 
     coverPage.drawText(dateText, {
       x: (cpWidth - dateWidth) / 2,
-      y: 200, // 145 + ~55
+      y: 260, // Moved up 60px
       size: dateSize,
       font: helveticaFont,
       color: rgb(0.2, 0.2, 0.2), // Dark Gray
