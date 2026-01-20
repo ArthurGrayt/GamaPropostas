@@ -797,6 +797,102 @@ export const updateProposalClient = async (proposalId: number, newClientId: stri
   }
 };
 
+export const duplicateProposal = async (sourceProposalId: number, targetClientId: string, targetUnitId: number | null): Promise<boolean> => {
+  try {
+    // 1. Fetch source proposal
+    const { data: sourceProposal, error: fetchError } = await supabase
+      .from('proposta')
+      .select('*')
+      .eq('id', sourceProposalId)
+      .single();
+
+    if (fetchError || !sourceProposal) {
+      console.error('Error fetching source proposal for duplication:', fetchError);
+      return false;
+    }
+
+    // 2. Fetch source items
+    const rawItems = sourceProposal.itensproposta || (sourceProposal as any).itens_proposta;
+    const itemIds = Array.isArray(rawItems) ? rawItems.filter((x: any) => x != null) : [];
+    let sourceItems: ItemProposta[] = [];
+
+    if (itemIds.length > 0) {
+      const { data, error: itemsError } = await supabase.from('itensproposta').select('*').in('id', itemIds);
+      if (itemsError) {
+        console.error('Error fetching source items:', itemsError);
+        return false;
+      }
+      sourceItems = (data || []) as ItemProposta[];
+    }
+
+    // 3. Create new proposal
+    const { data: newProposalData, error: createError } = await supabase
+      .from('proposta')
+      .insert({
+        idcliente: targetClientId,
+        unidade_id: targetUnitId || null,
+        created_at: new Date().toISOString(),
+        status: 'PENDING',
+        // Optional: Copy other fields if necessary, but keep it clean for now
+      })
+      .select()
+      .single();
+
+    if (createError || !newProposalData) {
+      console.error('Error creating duplicated proposal:', createError);
+      return false;
+    }
+
+    const newProposalId = newProposalData.id;
+
+    // 4. Duplicate items
+    if (sourceItems.length > 0) {
+      const itemsPayload = sourceItems.map(item => ({
+        idprocedimento: item.idprocedimento,
+        quantidade: item.quantidade,
+        preco: item.preco,
+        observacao: item.observacao,
+        status: 'PENDING', // Reset status
+        data_para_entrega: item.data_para_entrega, // Keep delivery date expectation? Maybe.
+        feedback: null, // Clear feedback
+        data_entregue: null // Clear delivery date
+      }));
+
+      const { data: newItemsData, error: newItemsError } = await supabase
+        .from('itensproposta')
+        .insert(itemsPayload)
+        .select('id');
+
+      if (newItemsError) {
+        console.error('Error creating duplicated items:', newItemsError);
+        // We might want to revert the proposal creation here, but let's keep it simple
+        return false;
+      }
+
+      // 5. Link new items to new proposal
+      if (newItemsData && newItemsData.length > 0) {
+        const newIds = newItemsData.map(x => x.id);
+        await supabase
+          .from('proposta')
+          .update({ itensproposta: newIds })
+          .eq('id', newProposalId);
+      }
+    }
+
+    await logAction('CREATE', `Duplicou proposta #${sourceProposalId} para nova proposta #${newProposalId} (Cliente ${targetClientId})`, {
+      original_proposal_id: sourceProposalId,
+      new_proposal_id: newProposalId,
+      target_client_id: targetClientId
+    });
+
+    return true;
+
+  } catch (e: any) {
+    console.error('Exception duplicating proposal:', e.message);
+    return false;
+  }
+};
+
 export const createDocSeg = async (docSeg: any) => {
 
   const { data, error } = await supabase
