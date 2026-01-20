@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { EnrichedProposal, EnrichedItem, ItemStatus, ProposalStatus } from '../types';
-import { getProposalById, updateItemStatus, updateProposalStatus } from '../services/mockData';
+import { EnrichedProposal, EnrichedItem, ItemStatus, ProposalStatus, DocSeg } from '../types';
+import { getProposalById, updateItemStatus, updateProposalStatus, createDocSeg } from '../services/mockData';
 import { GlassCard, StatusBadge, Avatar } from './UIComponents';
 import { CheckCircle, XCircle, Clock, Box, ChevronDown, Trophy, Package, AlertCircle, Loader2, Check, X } from 'lucide-react';
 
@@ -45,6 +45,42 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
 
     const handleItemAction = async (item: EnrichedItem, newStatus: ItemStatus, feedback?: string) => {
         if (!proposal) return;
+
+        // Auto-create Gamaseg (DocSeg) on Approval
+        if (newStatus === 'APPROVED') {
+            const isExcludedModule = item.modulo?.nome && (
+                item.modulo.nome.toLowerCase().includes('exames') ||
+                item.modulo.nome.toLowerCase().includes('esocial')
+            );
+
+            if (!isExcludedModule && proposal.unidade_id) {
+                try {
+                    // Determine deadline: item deadline or 30 days from now
+                    let deadline = new Date();
+                    if (item.data_para_entrega) {
+                        deadline = new Date(item.data_para_entrega);
+                    } else {
+                        deadline.setDate(deadline.getDate() + 30);
+                    }
+
+                    const docSegData: DocSeg = {
+                        mes: new Date().getMonth() + 1,
+                        empresa: proposal.unidade_id,
+                        doc: item.procedimento.id,
+                        valor: item.total || item.preco || 0,
+                        status: 'Pendente',
+                        data_recebimento: new Date().toISOString(),
+                        prazo: deadline.toISOString(),
+                        data_entrega: deadline.toISOString(),
+                        enviado: false,
+                        obs: ''
+                    };
+                    await createDocSeg(docSegData);
+                } catch (error) {
+                    console.error("Error auto-creating gamaseg item:", error);
+                }
+            }
+        }
 
         setUpdatingItems(prev => ({ ...prev, [item.id]: true }));
         await updateItemStatus(item.id, newStatus, feedback);
@@ -296,13 +332,13 @@ export const ClientProposalView: React.FC<Props> = ({ proposalId }) => {
                             </span>
                         </div>
                         <button
-                            onClick={() => {
+                            onClick={async () => {
                                 if (window.confirm("Deseja aprovar todos os itens pendentes?")) {
-                                    proposal.itens.forEach(item => {
+                                    for (const item of proposal.itens) {
                                         if (item.status !== 'APPROVED') {
-                                            handleItemAction(item, 'APPROVED');
+                                            await handleItemAction(item, 'APPROVED');
                                         }
-                                    });
+                                    }
                                 }
                             }}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
