@@ -610,6 +610,25 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     }
 
     // Add Generation Date (approx 50px above the contact info links ~ y=145)
+
+    // --- "Proposta Comercial" Title ---
+    // User requested: "40px acima da logo". 
+    // Assuming Logo is centered or near the optical center (approx y=420-440).
+    // Placing text at y=480.
+    const proposalTitleText = "Proposta Comercial";
+    const proposalTitleSize = 30; // Prominent size
+    const titleFont = await finalDoc.embedFont(StandardFonts.HelveticaBold);
+    const titleWidth = titleFont.widthOfTextAtSize(proposalTitleText, proposalTitleSize);
+
+    coverPage.drawText(proposalTitleText, {
+      x: (cpWidth - titleWidth) / 2,
+      y: 650, // Moved down 30px from 680 as requested
+      size: proposalTitleSize,
+      font: titleFont,
+      color: rgb(0.2, 0.2, 0.2), // Dark Gray to match date
+    });
+
+    // Add Generation Date (approx 50px above the contact info links ~ y=145)
     const helveticaFont = await finalDoc.embedFont(StandardFonts.Helvetica);
     const dateText = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
     const dateSize = 12;
