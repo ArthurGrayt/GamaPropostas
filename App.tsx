@@ -4,7 +4,7 @@ import { ProposalDetail } from './components/ProposalDetail';
 import { ProposalCreate } from './components/ProposalCreate';
 import { ClientManagement } from './components/ClientManagement';
 import { PriceEditor } from './components/PriceEditor';
-import { getProposals, getProposalById, updateProposalStatus } from './services/mockData';
+import { getProposals, getProposalById, updateProposalStatus, fetchPdfGlobalConfig, savePdfGlobalConfig } from './services/mockData';
 import { EnrichedProposal, ProposalStatus } from './types';
 import { Loader2, LogOut, User, SlidersHorizontal, Sun, Moon, FileText } from 'lucide-react';
 import { AuthProvider, useAuth } from './components/AuthProvider';
@@ -94,24 +94,31 @@ const MainApp: React.FC = () => {
 
   // PDF Text Editor State (Global)
   const [isPdfEditorOpen, setIsPdfEditorOpen] = useState(false);
-  const [pdfTexts, setPdfTexts] = useState(() => {
-    const saved = localStorage.getItem('pdf_texts');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Merge saved with defaults to ensure new keys exist
-        return { ...DEFAULT_PDF_TEXTS, ...parsed };
-      } catch (e) {
-        console.error('Error parsing saved pdf texts', e);
-      }
-    }
-    return DEFAULT_PDF_TEXTS;
-  });
+  const [pdfTexts, setPdfTexts] = useState(DEFAULT_PDF_TEXTS);
 
-  const handleSavePdfTexts = (newTexts: any) => {
+  // Load PDF Config from Backend
+  useEffect(() => {
+    const loadConfig = async () => {
+      const savedConfig = await fetchPdfGlobalConfig();
+      if (savedConfig) {
+        setPdfTexts(prev => ({ ...prev, ...savedConfig })); // Merge with defaults
+      }
+    };
+    loadConfig();
+  }, []);
+
+  const handleSavePdfTexts = async (newTexts: any) => {
+    // 1. Optimistic Update
     setPdfTexts(newTexts);
-    localStorage.setItem('pdf_texts', JSON.stringify(newTexts));
     setIsPdfEditorOpen(false);
+
+    // 2. Persist to Backend
+    try {
+      await savePdfGlobalConfig(newTexts);
+    } catch (error) {
+      console.error("Failed to save global PDF config:", error);
+      // Optional: Revert or show toast
+    }
   };
 
   // Initial Load

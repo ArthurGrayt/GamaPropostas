@@ -5,6 +5,43 @@ import {
   EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus
 } from '../types';
 
+export interface PdfTexts {
+  intro: string;
+  footer: string;
+  headerTitle: string;
+  proposalPrefix: string;
+  tableHeaders: {
+    col1: string;
+    col2: string;
+    col3: string;
+  };
+  observationLabel: string;
+  whoWeAreTitle?: string;
+  whoWeAreText?: string;
+  ourTeamTitle?: string;
+  teamCol1Title?: string;
+  teamCol1Text?: string;
+  teamCol2Title?: string;
+  teamCol2Text?: string;
+  whyChooseTitle?: string;
+  whyChooseText?: string;
+  introExames?: string;
+  introDocumentos?: string;
+  introEsocial?: string;
+  introTreinamentos?: string;
+  introServicosSST?: string;
+  coverImage?: string;
+  backgroundImage?: string;
+  backCoverImage?: string;
+  margin?: number;
+  marginTop?: number;
+  marginBottom?: number;
+  customModuleTitles?: Record<string, string>;
+  coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
+  moduleTotals?: Record<string, boolean>;
+  moduleObservations?: Record<string, string>;
+}
+
 // --- Interfaces for Context ---
 export interface CatalogContext {
   modulos: Modulo[];
@@ -991,16 +1028,62 @@ export const updateClientModality = async (clientId: string, modality: string): 
     const { error } = await supabase
       .from('clientes')
       .update({ modalidade: modality })
-      .filter('id', 'eq', clientId); // Using filter locally or eq if exact match works
+      .eq('id', clientId);
 
     if (error) throw error;
-    await logAction('UPDATE', `Atualizou modalidade do cliente ${clientId} para '${modality}'`, { client_id: clientId, modality });
     return true;
   } catch (error) {
-    console.error("Error updating client modality:", error);
+    console.error('Error updating client modality:', error);
     return false;
   }
 };
+
+// --- Global PDF Settings Persistence ---
+
+export const fetchPdfGlobalConfig = async (): Promise<PdfTexts | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'pdf_global_config')
+      .single();
+
+    if (error) {
+      // PGRST116 is "The result contains 0 rows"
+      if (error.code !== 'PGRST116') {
+        console.warn('Error fetching pdf global config:', error);
+      }
+      return null;
+    }
+
+    return data?.value as PdfTexts;
+  } catch (err) {
+    console.error('Exception fetching pdf global config:', err);
+    return null;
+  }
+};
+
+export const savePdfGlobalConfig = async (config: PdfTexts): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({
+        key: 'pdf_global_config',
+        value: config,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+
+    if (error) {
+      console.error('Error saving pdf global config:', error);
+      throw error;
+    }
+  } catch (err) {
+    console.error('Exception saving pdf global config:', err);
+    throw err;
+  }
+};
+
+
 
 export const uploadPdfAsset = async (file: File): Promise<{ publicUrl: string | null; error: string | null }> => {
   try {
