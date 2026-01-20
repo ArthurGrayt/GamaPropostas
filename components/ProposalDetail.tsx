@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector, cn } from './UIComponents';
 import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings, Share2, Building2, User, ChevronRight } from 'lucide-react';
@@ -256,6 +257,17 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     const [globalDeadline, setGlobalDeadline] = useState('');
     const [itemDeadlines, setItemDeadlines] = useState<Record<number, string>>({});
     const [isSavingDeadlines, setIsSavingDeadlines] = useState(false);
+
+    useEffect(() => {
+        if (isDeadlineModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isDeadlineModalOpen]);
 
     const openDeadlineModal = () => {
         // Initialize with existing deadlines
@@ -1669,9 +1681,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             }
             {/* Deadline Configuration Modal */}
             {
-                isDeadlineModalOpen && (
-                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh]">
+                isDeadlineModalOpen && createPortal(
+                    <div className="fixed inset-0 z-[110] flex justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                        <div className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh] my-auto">
                             <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center shrink-0">
                                 <div>
                                     <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
@@ -1739,15 +1751,16 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )
             }
 
             {/* Share Modal */}
             {
-                isShareModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800">
+                isShareModalOpen && createPortal(
+                    <div className="fixed inset-0 z-[100] flex justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 my-auto">
                             <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center">
                                 <h3 className="font-bold text-lg text-zinc-900 dark:text-white">Compartilhar Proposta</h3>
                                 <button onClick={() => setIsShareModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
@@ -1790,8 +1803,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                 </div>
                             </div>
                         </div>
-                    </div>
-
+                    </div>,
+                    document.body
                 )
             }
             {
