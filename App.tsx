@@ -5,6 +5,7 @@ import { ProposalCreate } from './components/ProposalCreate';
 import { ClientManagement } from './components/ClientManagement';
 import { PriceEditor } from './components/PriceEditor';
 import { getProposals, getProposalById, updateProposalStatus, fetchPdfGlobalConfig, savePdfGlobalConfig } from './services/mockData';
+import { supabase } from './services/supabaseClient';
 import { EnrichedProposal, ProposalStatus } from './types';
 import { Loader2, LogOut, User, SlidersHorizontal, Sun, Moon, FileText } from 'lucide-react';
 import { AuthProvider, useAuth } from './components/AuthProvider';
@@ -105,6 +106,30 @@ const MainApp: React.FC = () => {
       }
     };
     loadConfig();
+
+    // Subscribe to Realtime Changes
+    const channel = supabase
+      .channel('public:app_settings')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'app_settings',
+          filter: 'key=eq.pdf_global_config'
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          if (payload.new && (payload.new as any).value) {
+            setPdfTexts(prev => ({ ...prev, ...(payload.new as any).value }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleSavePdfTexts = async (newTexts: any) => {
