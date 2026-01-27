@@ -16,9 +16,9 @@ export const GlassCard: React.FC<{ children: React.ReactNode; className?: string
     <div
       onClick={onClick}
       className={cn(
-        "bg-white/60 dark:bg-black/40 backdrop-blur-2xl border border-neutral-200/60 dark:border-white/10 shadow-xl",
-        "rounded-[32px] p-6 transition-all duration-300 ease-spring",
-        onClick && "cursor-pointer active:scale-[0.98] hover:bg-white/80 dark:hover:bg-black/50 hover:shadow-2xl",
+        "glass-panel bg-white/70 dark:bg-white/5 border border-white dark:border-white/10 shadow-glass-card-light",
+        "rounded-[2.5rem] p-7 transition-all duration-300 ease-spring",
+        onClick && "cursor-pointer hover:-translate-y-2 hover:shadow-2xl active:scale-[0.98]",
         className
       )}
     >
@@ -36,22 +36,22 @@ export const SearchBar: React.FC<{
 }> = ({ value, onChange, placeholder = "Buscar...", className }) => {
   return (
     <div className={cn("relative group", className)}>
-      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-400 group-focus-within:text-blue-500 transition-colors">
-        <Search size={20} />
+      <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-300 dark:text-slate-500 group-focus-within:text-slate-500 transition-colors">
+        <span className="material-icons-round text-2xl">search</span>
       </div>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-12 pl-11 pr-10 rounded-2xl bg-white/80 dark:bg-zinc-800/50 backdrop-blur-md border border-neutral-200/50 dark:border-white/5 focus:ring-2 focus:ring-blue-500/50 focus:outline-none text-zinc-800 dark:text-white placeholder-zinc-400 shadow-sm transition-all"
+        className="w-full h-14 pl-14 pr-12 rounded-[1.5rem] bg-white/80 dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-200 text-charcoal dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 transition-all backdrop-blur-md"
       />
       {value && (
         <button
           onClick={() => onChange('')}
-          className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+          className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
         >
-          <X size={16} className="bg-zinc-200 dark:bg-zinc-700 rounded-full p-0.5 w-5 h-5" />
+          <span className="material-icons-round bg-slate-200 dark:bg-slate-700 rounded-full p-0.5 text-base">close</span>
         </button>
       )}
     </div>
@@ -69,17 +69,17 @@ export const FilterPill: React.FC<{
     <button
       onClick={onClick}
       className={cn(
-        "px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300 border whitespace-nowrap",
+        "px-8 py-3 rounded-full font-bold transition-all duration-300 flex items-center gap-2",
         isActive
-          ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/25"
-          : "bg-white/80 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-300 border-neutral-200/50 dark:border-white/10 hover:bg-white dark:hover:bg-zinc-700/80"
+          ? "bg-sunrise-coral text-white shadow-soft-glow scale-105"
+          : "glass-panel bg-white/80 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:bg-white"
       )}
     >
       {label}
       {count !== undefined && (
         <span className={cn(
-          "ml-2 text-xs py-0.5 px-1.5 rounded-full",
-          isActive ? "bg-white/20 text-white" : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+          "flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold",
+          isActive ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400"
         )}>
           {count}
         </span>
@@ -92,7 +92,7 @@ export const FilterPill: React.FC<{
 // Dynamic colors based on proposal status
 export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles = {
-    PENDING: "bg-amber-400/20 text-amber-700 dark:text-amber-300 border-amber-400/30",
+    PENDING: "bg-[#118b89]/20 text-[#118b89] dark:text-[#118b89] border-[#118b89]/30",
     APPROVED: "bg-emerald-400/20 text-emerald-700 dark:text-emerald-300 border-emerald-400/30",
     REJECTED: "bg-rose-400/20 text-rose-700 dark:text-rose-300 border-rose-400/30",
     ARCHIVED: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400 border-zinc-400/30",

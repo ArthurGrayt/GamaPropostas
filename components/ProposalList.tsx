@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { EnrichedProposal, ProposalStatus, Client } from '../types';
-import { GlassCard, Avatar, SearchBar, FilterPill, ClientSelector } from './UIComponents';
+import { GlassCard, Avatar, SearchBar, FilterPill, ClientSelector, cn } from './UIComponents';
 import { ChevronRight, Calendar, DollarSign, CheckCircle, XCircle, Clock, Archive, Plus, FileText, Loader2, ListTodo, Copy } from 'lucide-react';
 import { generateProposalPdf } from '../services/pdfGenerator';
 import { getProposalById, fetchCatalogData, duplicateProposal } from '../services/mockData';
@@ -11,13 +11,34 @@ interface Props {
     onStatusChange: (id: number, newStatus: ProposalStatus) => void;
     onSelect: (id: number) => void;
     onCreate: () => void;
-    pdfTexts: any; // Using any to avoid circular dependency with App.tsx defaults
+    pdfTexts: any;
+    onNavigateToClients: () => void;
+    onNavigateToSettings: () => void;
+    onToggleTheme: () => void;
+    onOpenPdfEditor: () => void;
+    onSignOut: () => void;
+    userEmail?: string;
+    isDarkMode: boolean;
 }
 
 type FilterType = 'ALL' | ProposalStatus;
 
-export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusChange, onCreate, pdfTexts }) => {
+export const ProposalList: React.FC<Props> = ({
+    proposals,
+    onSelect,
+    onStatusChange,
+    onCreate,
+    pdfTexts,
+    onNavigateToClients,
+    onNavigateToSettings,
+    onToggleTheme,
+    onOpenPdfEditor,
+    onSignOut,
+    userEmail,
+    isDarkMode
+}) => {
 
+    const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
     const [dateFilter, setDateFilter] = useState<{
@@ -26,9 +47,16 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
     }>({ type: 'ALL', value: '' });
 
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<number | null>(null);
+    const [activeDropdown, setActiveDropdown] = useState<number | string | null>(null);
 
     // Persistence State
     const [savedProposal, setSavedProposal] = useState<{ clientName: string } | null>(null);
+
+    useEffect(() => {
+        const handleClickOutside = () => setActiveDropdown(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         const checkSaved = () => {
@@ -131,9 +159,9 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
             };
             default: return {
                 icon: Clock,
-                color: 'text-amber-600 dark:text-amber-400',
-                bg: 'bg-amber-500/5 hover:bg-amber-500/10',
-                iconBg: 'bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30'
+                color: 'text-[#118b89] dark:text-[#118b89]',
+                bg: 'bg-[#118b89]/5 hover:bg-[#118b89]/10',
+                iconBg: 'bg-[#118b89]/20 dark:bg-[#118b89]/20 hover:bg-[#118b89]/30 dark:hover:bg-[#118b89]/30'
             };
         }
     };
@@ -268,17 +296,67 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
         }
     };
 
+    const getColorForClient = (name: string) => {
+        return '#58AEAC';
+    };
+
     return (
         <div className="space-y-6 pb-24 relative">
             {/* Header */}
-            <header className="flex items-end justify-between">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
                 <div>
-                    <h1 className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight mb-2">
-                        Gama Propostas
-                    </h1>
-                    <p className="text-zinc-500 dark:text-zinc-400 font-medium text-lg">
-                        Gestão de Segurança
-                    </p>
+                    <h1 className="text-[2.5rem] font-extrabold tracking-tight dark:text-white text-slate-900 leading-tight">Gama Propostas</h1>
+                    <p className="text-lg text-slate-400 dark:text-slate-500 font-medium">Gestão de Segurança Corporativa</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    {userEmail && (
+                        <div className="hidden md:flex flex-col items-end mr-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Logado como</span>
+                            <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300">{userEmail}</span>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={onNavigateToClients}
+                        className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
+                        title="Gerenciar Clientes"
+                    >
+                        <span className="material-icons-round">person</span>
+                    </button>
+
+                    <button
+                        onClick={onNavigateToSettings}
+                        className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
+                        title="Configurações"
+                    >
+                        <span className="material-icons-round text-xl">tune</span>
+                    </button>
+
+                    <button
+                        onClick={onOpenPdfEditor}
+                        className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
+                        title="Editor de PDF"
+                    >
+                        <span className="material-icons-round text-xl">description</span>
+                    </button>
+
+                    <button
+                        onClick={onToggleTheme}
+                        className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
+                        title="Alternar Tema"
+                    >
+                        <span className={`material-icons-round text-xl ${!isDarkMode ? 'text-[#118b89]' : 'text-slate-400'}`}>
+                            {isDarkMode ? 'dark_mode' : 'light_mode'}
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={onSignOut}
+                        className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:scale-110 active:scale-95 transition-all"
+                        title="Sair"
+                    >
+                        <span className="material-icons-round text-xl">logout</span>
+                    </button>
                 </div>
             </header>
 
@@ -308,38 +386,134 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
                     </div>
                 )}
 
-                <div className="flex flex-col md:flex-row gap-4">
-                    <SearchBar
-                        value={searchQuery}
-                        onChange={setSearchQuery}
-                        placeholder="Buscar por cliente ou ID..."
-                        className="flex-grow"
-                    />
+                <div className="flex flex-col lg:flex-row gap-4 items-center">
+                    <div className="flex-grow w-full">
+                        <SearchBar
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                            placeholder="Buscar por cliente ou ID da proposta..."
+                            className="w-full"
+                        />
+                    </div>
 
-                    {/* Date Filters */}
-                    <div className="flex items-center gap-2 bg-white dark:bg-zinc-800 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                        <select
-                            value={dateFilter.type}
-                            onChange={(e) => setDateFilter({ type: e.target.value as any, value: '' })}
-                            className="bg-transparent text-sm font-medium text-zinc-700 dark:text-zinc-300 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="ALL">Todas as datas</option>
-                            <option value="DATE">Por Dia</option>
-                            <option value="MONTH">Por Mês</option>
-                        </select>
+                    <div className="flex items-center gap-4 w-full lg:w-auto">
+                        {/* View Toggle */}
+                        <div className="flex p-1.5 rounded-[1.5rem] glass-panel bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm h-[3.5rem] items-center">
+                            <button
+                                onClick={() => setViewMode('GRID')}
+                                className={cn(
+                                    "flex items-center justify-center w-12 h-11 rounded-2xl transition-all",
+                                    viewMode === 'GRID'
+                                        ? "bg-white dark:bg-white/10 shadow-sm text-charcoal dark:text-white"
+                                        : "hover:bg-white/40 dark:hover:bg-white/5 text-slate-400"
+                                )}
+                            >
+                                <span className="material-symbols-outlined fill-1">grid_view</span>
+                            </button>
+                            <button
+                                onClick={() => setViewMode('LIST')}
+                                className={cn(
+                                    "flex items-center justify-center w-12 h-11 rounded-2xl transition-all",
+                                    viewMode === 'LIST'
+                                        ? "bg-white dark:bg-white/10 shadow-sm text-charcoal dark:text-white"
+                                        : "hover:bg-white/40 dark:hover:bg-white/5 text-slate-400"
+                                )}
+                            >
+                                <span className="material-symbols-outlined">view_list</span>
+                            </button>
+                        </div>
 
-                        {dateFilter.type !== 'ALL' && (
-                            <input
-                                type={dateFilter.type === 'DATE' ? 'date' : 'month'}
-                                value={dateFilter.value}
-                                onChange={(e) => setDateFilter(prev => ({ ...prev, value: e.target.value }))}
-                                className="bg-zinc-100 dark:bg-zinc-900 border-none text-sm text-zinc-700 dark:text-zinc-300 rounded-md p-2 focus:ring-2 focus:ring-blue-500"
-                            />
-                        )}
+                        {/* Date Filter Selector */}
+                        {/* Date Filter Selector */}
+                        <div className="relative w-full lg:w-[280px] z-30">
+                            {/* Main Reference Button */}
+                            <div
+                                className="w-full h-[3.5rem] rounded-[1.5rem] glass-panel bg-white/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between px-6 cursor-pointer hover:bg-white dark:hover:bg-white/10 transition-all shadow-sm"
+                                onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'DATE_FILTER' ? null : 'DATE_FILTER'); }}
+                            >
+                                <span className="text-slate-500 dark:text-slate-300 font-bold text-sm truncate mr-2">
+                                    {dateFilter.type === 'ALL' ? 'Filtrar por data' :
+                                        dateFilter.type === 'DATE' ? (dateFilter.value ? new Date(dateFilter.value).toLocaleDateString() : 'Selecionar dia') :
+                                            (dateFilter.value ? dateFilter.value : 'Selecionar mês')}
+                                </span>
+                                {dateFilter.type !== 'ALL' ? (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setDateFilter({ type: 'ALL', value: '' }); }}
+                                        className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full text-slate-400"
+                                    >
+                                        <XCircle size={18} />
+                                    </button>
+                                ) : (
+                                    <Calendar size={18} className="text-slate-300" />
+                                )}
+                            </div>
+
+                            {/* Filter Dropdown Menu */}
+                            {activeDropdown === 'DATE_FILTER' && (
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute top-full right-0 mt-2 w-full min-w-[280px] bg-white dark:bg-zinc-900 shadow-2xl rounded-2xl border border-slate-100 dark:border-white/10 p-3 z-30 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
+                                >
+                                    <button
+                                        onClick={() => setDateFilter({ type: 'DATE', value: '' })}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold",
+                                            dateFilter.type === 'DATE' ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" : "hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400"
+                                        )}
+                                    >
+                                        <Calendar size={18} />
+                                        Filtrar por dia
+                                    </button>
+
+                                    {dateFilter.type === 'DATE' && (
+                                        <div className="px-4 pb-2 animate-in slide-in-from-top-2">
+                                            <input
+                                                type="date"
+                                                value={dateFilter.value}
+                                                onChange={(e) => setDateFilter({ type: 'DATE', value: e.target.value })}
+                                                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-700 dark:text-slate-200"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={() => setDateFilter({ type: 'MONTH', value: '' })}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold",
+                                            dateFilter.type === 'MONTH' ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" : "hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400"
+                                        )}
+                                    >
+                                        <Calendar size={18} />
+                                        Filtrar por mês
+                                    </button>
+
+                                    {dateFilter.type === 'MONTH' && (
+                                        <div className="px-4 pb-2 animate-in slide-in-from-top-2">
+                                            <input
+                                                type="month"
+                                                value={dateFilter.value}
+                                                onChange={(e) => setDateFilter({ type: 'MONTH', value: e.target.value })}
+                                                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-700 dark:text-slate-200"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="h-px bg-slate-100 dark:bg-white/10 my-1"></div>
+
+                                    <button
+                                        onClick={() => { setDateFilter({ type: 'ALL', value: '' }); setActiveDropdown(null); }}
+                                        className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-all text-sm font-medium"
+                                    >
+                                        <XCircle size={18} />
+                                        Limpar filtro
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <div className="flex flex-wrap gap-3 overflow-x-auto py-4 px-4 -mx-4 scrollbar-hide">
                     <FilterPill
                         label="Todas"
                         isActive={activeFilter === 'ALL'}
@@ -364,97 +538,206 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
                         onClick={() => setActiveFilter('REJECTED')}
                         count={dateFilteredActiveProposals.filter(p => p.status === 'REJECTED').length}
                     />
-                    <FilterPill
-                        label="Arquivadas"
-                        isActive={activeFilter === 'ARCHIVED'}
-                        onClick={() => setActiveFilter('ARCHIVED')}
-                        count={dateFilteredArchivedProposals.length}
-                    />
                 </div>
             </section>
 
-            {/* Grid de Cards */}
+            {/* Grid or List of Cards */}
             {filteredProposals.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                    {filteredProposals.map((prop) => {
-                        const { icon: StatusIcon, color: statusColor, bg: statusBg, iconBg } = getStatusVisuals(prop.status);
+                viewMode === 'GRID' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                        {filteredProposals.map((prop) => {
+                            const { icon: StatusIcon, color: statusColor, bg: statusBg, iconBg } = getStatusVisuals(prop.status);
 
-                        return (
-                            <GlassCard key={prop.id} onClick={() => onSelect(prop.id)} className={`group relative overflow-hidden transition-all duration-300 hover:shadow-2xl ${statusBg} border-opacity-50`}>
-
-                                <div className="relative z-10 flex flex-col h-full">
+                            return (
+                                <GlassCard key={prop.id} onClick={() => onSelect(prop.id)} className="group relative overflow-hidden transition-all duration-300">
                                     <div className="flex justify-between items-start mb-6">
-                                        <div className="flex items-center gap-3 pr-2 overflow-hidden">
-                                            <Avatar src={prop.cliente.avatar || ''} alt={prop.cliente.nome} />
-                                            <div className="min-w-0">
-                                                <h3 className="font-bold text-lg text-zinc-800 dark:text-white leading-tight truncate">
+                                        <div className="flex items-center gap-4">
+                                            <div
+                                                className={`w-14 h-14 rounded-full flex items-center justify-center text-[#2D7A78] font-bold text-lg relative overflow-hidden`}
+                                                style={{ backgroundColor: `${getColorForClient(prop.cliente.nome)}26` }}
+                                            >
+                                                {prop.cliente.nome.substring(0, 2).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-charcoal dark:text-white text-lg leading-tight uppercase truncate max-w-[120px]">
                                                     {prop.cliente.nome}
                                                 </h3>
-                                                <span className="text-xs text-zinc-500 font-medium">#{prop.id}</span>
+                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">ID: #{prop.id}</span>
                                             </div>
                                         </div>
-
-                                        {/* Ícone de Status Interativo */}
                                         <div
                                             role="button"
-                                            aria-label={`Alterar status atual: ${prop.status}`}
                                             onClick={(e) => handleIconClick(e, prop.id, prop.status)}
-                                            title="Clique para alterar o status"
-                                            className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${iconBg} ${statusColor} backdrop-blur-md shadow-sm border border-white/10 cursor-pointer transition-transform duration-200 active:scale-90 hover:scale-110`}
+                                            className={`p-2 rounded-xl border transition-all ${prop.status === 'APPROVED' ? 'bg-green-50/50 dark:bg-green-900/20 border-green-100 dark:border-green-800' :
+                                                prop.status === 'REJECTED' ? 'bg-rose-50/50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800' :
+                                                    'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                                                }`}
                                         >
-                                            <StatusIcon size={16} strokeWidth={2.5} />
+                                            <StatusIcon size={20} className={statusColor} />
                                         </div>
                                     </div>
 
-                                    <div className="space-y-3 mb-6 flex-grow">
-                                        <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
-                                            <div className="p-1.5 bg-stone-100 dark:bg-zinc-800 rounded-lg">
-                                                <Calendar size={16} />
-                                            </div>
+                                    <div className="space-y-4 mb-8 pl-1">
+                                        <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
+                                            <span className="material-icons-round text-sm opacity-50">calendar_today</span>
                                             <span className="text-sm font-medium">
-                                                {new Date(prop.created_at).toLocaleDateString('pt-BR')}
+                                                {new Date(prop.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
-                                            <div className="p-1.5 bg-stone-100 dark:bg-zinc-800 rounded-lg">
-                                                <DollarSign size={16} />
-                                            </div>
-                                            <span className="text-sm font-medium">
+                                        <div className="flex items-center gap-3 text-charcoal dark:text-slate-100">
+                                            <span className="material-icons-round text-sm opacity-50">payments</span>
+                                            <span className="text-xl font-extrabold tracking-tight">
                                                 {prop.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between pt-4 border-t border-neutral-200/50 dark:border-white/10">
-                                        <span className="text-sm font-semibold text-zinc-400">
-                                            {prop.itens.length} {prop.itens.length === 1 ? 'item' : 'itens'}
+                                    <div className="flex items-center justify-between pt-5 border-t border-slate-100 dark:border-white/5">
+                                        <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em]">
+                                            {prop.itens.length} {prop.itens.length === 1 ? 'item listado' : 'itens listados'}
                                         </span>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex gap-1">
                                             <button
                                                 onClick={(e) => handleDuplicateClick(e, prop.id)}
-                                                title="Duplicar Proposta"
-                                                className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-blue-500 hover:text-white transition-colors duration-300"
+                                                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400"
+                                                title="Duplicar"
                                             >
-                                                <Copy size={16} />
+                                                <span className="material-icons-round text-lg">content_copy</span>
                                             </button>
                                             <button
                                                 onClick={(e) => handleGeneratePdf(e, prop.id)}
-                                                title="Gerar PDF"
-                                                className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-blue-500 hover:text-white transition-colors duration-300"
                                                 disabled={isGeneratingPdf === prop.id}
+                                                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400"
+                                                title="PDF"
                                             >
-                                                {isGeneratingPdf === prop.id ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                                                {isGeneratingPdf === prop.id ? <Loader2 size={16} className="animate-spin" /> : <span className="material-symbols-outlined text-lg">description</span>}
                                             </button>
-                                            <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
-                                                <ChevronRight size={18} />
+                                            <button className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-50 dark:bg-white/5 text-charcoal dark:text-slate-300 hover:scale-110 transition-transform">
+                                                <span className="material-icons-round text-lg">chevron_right</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </GlassCard>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-3">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-[2fr,0.5fr,1.2fr,1.2fr,1fr,1fr,0.5fr] px-6 py-2 text-[10px] font-extrabold text-slate-400/80 dark:text-slate-500/80 uppercase tracking-[0.2em] items-center">
+                            <div className="pl-4">Cliente</div>
+                            <div className="text-center">ID</div>
+                            <div className="text-center">Data</div>
+                            <div className="text-center">Valor</div>
+                            <div className="text-center">Itens</div>
+                            <div className="text-center">Status</div>
+                            <div className="text-right pr-6">Ações</div>
+                        </div>
+
+                        {filteredProposals.map((prop) => {
+                            const { icon: StatusIcon, color: statusColor } = getStatusVisuals(prop.status);
+
+                            return (
+                                <GlassCard
+                                    key={prop.id}
+                                    onClick={() => onSelect(prop.id)}
+                                    className={cn(
+                                        "group grid grid-cols-[2fr,0.5fr,1.2fr,1.2fr,1fr,1fr,0.5fr] px-6 py-4 items-center gap-4 transition-all duration-300 hover:translate-x-1 border-transparent hover:border-slate-200 dark:hover:border-white/10 rounded-[1.5rem]",
+                                        activeDropdown === prop.id ? "z-50 relative border-slate-200 dark:border-white/10" : "z-0"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center text-[#2D7A78] font-bold text-xs relative overflow-hidden flex-shrink-0`}
+                                            style={{ backgroundColor: `${getColorForClient(prop.cliente.nome)}26` }}
+                                        >
+                                            {prop.cliente.nome.substring(0, 2).toUpperCase()}
+                                        </div>
+                                        <h3 className="font-bold text-charcoal dark:text-slate-200 text-sm leading-tight uppercase truncate">
+                                            {prop.cliente.nome}
+                                        </h3>
+                                    </div>
+
+                                    <div className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 tracking-tighter">
+                                        #{prop.id}
+                                    </div>
+
+                                    <div className="text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                        {new Date(prop.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    </div>
+
+                                    <div className="text-center font-extrabold text-charcoal dark:text-slate-100 tracking-tight text-base">
+                                        {prop.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </div>
+
+                                    <div className="text-center text-xs font-medium text-slate-500 dark:text-slate-400">
+                                        {prop.itens.length} {prop.itens.length === 1 ? 'item' : 'itens'}
+                                    </div>
+
+                                    <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+                                        <div
+                                            role="button"
+                                            title="Clique para alterar o status"
+                                            onClick={(e) => handleIconClick(e, prop.id, prop.status)}
+                                            className={cn(
+                                                "w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95",
+                                                prop.status === 'APPROVED' ? 'text-green-500 bg-green-50/50 dark:bg-green-900/20' :
+                                                    prop.status === 'REJECTED' ? 'text-rose-500 bg-rose-50/50 dark:bg-rose-900/20' :
+                                                        'text-slate-300 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'
+                                            )}
+                                        >
+                                            {prop.status === 'APPROVED' ? (
+                                                <span className="material-icons-round text-2xl">check_circle</span>
+                                            ) : prop.status === 'REJECTED' ? (
+                                                <span className="material-icons-round text-2xl">cancel</span>
+                                            ) : (
+                                                <span className="material-icons-round text-2xl">history</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end pr-2">
+                                        <div className="relative">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === prop.id ? null : prop.id); }}
+                                                className={cn(
+                                                    "p-2 rounded-full transition-all",
+                                                    activeDropdown === prop.id ? "bg-slate-100 dark:bg-white/10 text-charcoal dark:text-white" : "hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400"
+                                                )}
+                                            >
+                                                <span className="material-icons-round text-2xl">more_vert</span>
+                                            </button>
+
+                                            {/* Action Dropdown Menu */}
+                                            <div
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={cn(
+                                                    "absolute right-0 top-full mt-2 flex-col bg-white dark:bg-zinc-950 shadow-2xl rounded-2xl border border-slate-100 dark:border-white/10 p-2 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-200 min-w-[140px]",
+                                                    activeDropdown === prop.id ? "flex" : "hidden"
+                                                )}
+                                            >
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setActiveDropdown(null); handleDuplicateClick(e, prop.id); }}
+                                                    className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 transition-colors text-sm font-bold whitespace-nowrap"
+                                                >
+                                                    <span className="material-icons-round text-xl">content_copy</span>
+                                                    Copiar
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setActiveDropdown(null); handleGeneratePdf(e, prop.id); }}
+                                                    className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 transition-colors text-sm font-bold whitespace-nowrap"
+                                                >
+                                                    <span className="material-symbols-outlined text-xl">description</span>
+                                                    Gerar PDF
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </GlassCard>
-                        );
-                    })}
-                </div>
+                                </GlassCard>
+                            );
+                        })}
+                    </div>
+                )
             ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-center text-zinc-400 animate-fade-in">
                     <div className="bg-zinc-100 dark:bg-zinc-800 p-6 rounded-full mb-4">
@@ -466,16 +749,19 @@ export const ProposalList: React.FC<Props> = ({ proposals, onSelect, onStatusCha
             )}
 
             {/* Floating Action Button (FAB) for Creating Proposal */}
-            <button
-                onClick={onCreate}
-                className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg shadow-blue-600/30 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 z-50 group"
-                aria-label="Criar nova proposta"
-            >
-                <Plus size={28} />
-                <span className="absolute right-full mr-3 bg-zinc-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                    Nova Proposta
-                </span>
-            </button>
+            <div className="fixed bottom-10 right-10 z-50">
+                <button
+                    onClick={onCreate}
+                    className="w-16 h-16 rounded-full bg-[#58AEAC] hover:bg-[#4C9C9A] active:bg-[#3A8583] flex items-center justify-center shadow-[0_8px_24px_rgba(0,0,0,0.15)] hover:scale-110 active:scale-95 transition-all duration-300 relative group"
+                    aria-label="Criar nova proposta"
+                >
+                    <span className="material-icons-round text-white text-3xl z-10">add</span>
+
+                    <span className="absolute bottom-full mb-4 right-0 bg-zinc-900/80 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-white/10">
+                        Nova Proposta
+                    </span>
+                </button>
+            </div>
 
             {/* Duplicate Modal */}
             {isDuplicateModalOpen && (

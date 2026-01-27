@@ -9,13 +9,45 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@48,400,0,0"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+    rel="stylesheet" />
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
+          colors: {
+            "charcoal": "#334155",
+            "dusty-berry": "#A65D7B",
+            "forest-sage": "#5F7A61",
+            "warm-ochre": "#C48E4D",
+            "soft-sapphire": "#527DA3",
+            "sunrise-coral": "#118b89",
+            "royal-glass": "rgba(65, 105, 225, 0.4)",
+            "pearl-white": "#FDFDFD",
+            "background-light": "#F8FAFC",
+            "background-dark": "#0F172A"
+          },
           fontFamily: {
+            display: "Inter",
+            body: ["Inter", "sans-serif"],
             sans: ['Inter', 'sans-serif'],
+          },
+          boxShadow: {
+            "soft-glow": "0 4px 14px 0 rgba(17, 139, 137, 0.39)",
+            "glass-card-light": "0 8px 32px 0 rgba(31, 38, 135, 0.05)",
+            "inner-glow": "inset 0 0 12px rgba(255, 255, 255, 0.4), 0 4px 12px rgba(0, 0, 0, 0.05)",
+            "sphere": "inset -10px -10px 20px rgba(0,0,0,0.1), inset 10px 10px 20px rgba(255,255,255,0.4), 0 15px 25px rgba(65, 105, 225, 0.2)"
+          },
+          borderRadius: {
+            DEFAULT: "1rem",
+            lg: "2rem",
+            xl: "3rem",
+            full: "9999px"
           },
           animation: {
             'pulse-slow': 'pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -46,44 +78,38 @@
     }
   </script>
   <style>
-    body {
-      background-color: #fafaf9;
-      /* Fallback for stone-50 */
+    ::-webkit-scrollbar {
+      width: 8px;
     }
 
-    html.dark body {
-      background-color: #050505;
-    }
-
-    /* Custom Scrollbar */
-    .custom-scrollbar::-webkit-scrollbar {
-      height: 6px;
-      width: 6px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-track {
+    ::-webkit-scrollbar-track {
       background: transparent;
     }
 
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background-color: #d6d3d1;
-      /* stone-300 */
-      border-radius: 20px;
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.2);
+      border-radius: 4px;
     }
 
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background-color: #a8a29e;
-      /* stone-400 */
+    .glass-panel {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
 
-    html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-      background-color: #27272a;
-      /* zinc-800 */
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     }
 
-    html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background-color: #3f3f46;
-      /* zinc-700 */
+    .sphere-reflection {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 50%);
+    }
+
+    body {
+      background-color: #F8FAFC;
+    }
+
+    html.dark body {
+      background-color: #0F172A;
     }
   </style>
   <script type="importmap">
@@ -105,7 +131,18 @@
 </head>
 
 <body class="bg-stone-50 dark:bg-[#050505] transition-colors duration-500">
-  <div id="root"></div>
+  <div id="root" class="relative z-10"></div>
+  <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+    <div
+      class="absolute -top-[10%] -left-[10%] w-[60vw] h-[60vw] bg-slate-100/40 rounded-full blur-[120px] dark:hidden block">
+    </div>
+    <div
+      class="absolute top-[30%] -right-[10%] w-[50vw] h-[50vw] bg-blue-50/30 rounded-full blur-[100px] dark:hidden block">
+    </div>
+    <div
+      class="absolute -bottom-[10%] -left-[10%] w-[40vw] h-[40vw] bg-indigo-50/20 rounded-full blur-[100px] dark:hidden block">
+    </div>
+  </div>
   <script type="module" src="/index.tsx"></script>
 </body>
 
