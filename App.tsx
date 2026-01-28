@@ -241,8 +241,8 @@ const MainApp: React.FC = () => {
 
 
       <main className={
-        view === 'CREATE' || view === 'SETTINGS'
-          ? 'h-screen'
+        view === 'CREATE' || view === 'SETTINGS' || view === 'CLIENTS'
+          ? 'h-screen overflow-y-auto'
           : 'px-4 sm:px-6 lg:px-8 pt-12 min-h-screen'
       }>
         {isLoading && proposals.length === 0 ? (

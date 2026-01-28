@@ -70,15 +70,6 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
         setLoadingDetails(false);
     };
 
-    const getProposalStatusColor = (status: ProposalStatus) => {
-        switch (status) {
-            case 'APPROVED': return 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
-            case 'REJECTED': return 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800';
-            case 'PENDING': return 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800';
-            default: return 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700';
-        }
-    };
-
     const getProposalStatusLabel = (status: ProposalStatus) => {
         switch (status) {
             case 'APPROVED': return 'Aprovada';
@@ -89,115 +80,181 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
         }
     };
 
+    const getProposalIdColor = (status: ProposalStatus) => {
+        switch (status) {
+            case 'APPROVED': return 'text-emerald-500';
+            case 'REJECTED': return 'text-rose-500';
+            case 'PENDING': return 'text-amber-500';
+            default: return 'text-zinc-500';
+        }
+    };
+
+    const getProposalStatusBadge = (status: ProposalStatus) => {
+        switch (status) {
+            case 'APPROVED': return 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400';
+            case 'REJECTED': return 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400';
+            case 'PENDING': return 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400';
+            default: return 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400';
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-stone-50 dark:bg-[#050505] animate-fade-in pb-10">
+        <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#050505] animate-fade-in pb-20 font-sans">
             {/* Header */}
-            <div className="sticky top-0 z-20 bg-stone-100/80 dark:bg-[#050505]/80 backdrop-blur-xl border-b border-neutral-200/50 dark:border-white/5 px-4 pt-6 pb-4 space-y-4">
-                <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
-                        <ArrowLeft />
+            <div className="sticky top-0 z-20 bg-[#F8FAFC]/90 dark:bg-[#050505]/90 backdrop-blur-xl px-6 pt-8 pb-4">
+                <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={onBack}
+                            className="w-10 h-10 rounded-full flex items-center justify-center bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm border border-zinc-100 dark:border-zinc-700"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight">
+                                Gerenciar Unidades
+                            </h1>
+                            <span className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs font-bold border border-zinc-200 dark:border-zinc-700">
+                                {units.length}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 max-w-lg">
+                        <div className="relative group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#118b89] transition-colors" size={20} />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Buscar unidade ou cliente..."
+                                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-zinc-900 rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-[#118b89]/20 text-zinc-700 dark:text-zinc-200 font-medium placeholder:text-zinc-400 transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    <button className="hidden md:flex w-10 h-10 rounded-full items-center justify-center bg-white dark:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors shadow-sm">
+                        <span className="material-icons-round text-xl">dark_mode</span>
                     </button>
-                    <h1 className="text-2xl font-bold text-zinc-900 dark:text-white flex items-center gap-3">
-                        Gerenciar Unidades
-                        <span className="text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 px-3 py-1 rounded-full border border-zinc-200 dark:border-zinc-700">
-                            {units.length}
-                        </span>
-                    </h1>
                 </div>
-                <SearchBar
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                    placeholder="Buscar unidade ou cliente..."
-                />
-                <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center px-2">Propostas:</span>
-                        <FilterPill
-                            label="Todos"
-                            isActive={statusFilter === 'ALL'}
+
+                {/* Filters */}
+                <div className="max-w-6xl mx-auto mt-8 flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                    <span className="text-[10px] font-extrabold text-zinc-400/80 uppercase tracking-widest whitespace-nowrap">PROPOSTAS:</span>
+                    <div className="flex items-center gap-2">
+                        <button
                             onClick={() => setStatusFilter('ALL')}
-                        />
-                        <FilterPill
-                            label="Com Pendências"
-                            isActive={statusFilter === 'PENDING'}
+                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap ${statusFilter === 'ALL' ? 'bg-[#118b89] text-white shadow-lg shadow-[#118b89]/20 scale-105' : 'text-zinc-500 hover:bg-white/50'}`}
+                        >
+                            Todos
+                        </button>
+                        <button
                             onClick={() => setStatusFilter('PENDING')}
-                        />
-                        <FilterPill
-                            label="Aprovados"
-                            isActive={statusFilter === 'APPROVED'}
+                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap ${statusFilter === 'PENDING' ? 'bg-[#118b89] text-white shadow-lg shadow-[#118b89]/20 scale-105' : 'text-zinc-500 hover:bg-white/50'}`}
+                        >
+                            Com Pendências
+                        </button>
+                        <button
                             onClick={() => setStatusFilter('APPROVED')}
-                        />
-                        <FilterPill
-                            label="Reprovados"
-                            isActive={statusFilter === 'REJECTED'}
+                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap ${statusFilter === 'APPROVED' ? 'bg-[#118b89] text-white shadow-lg shadow-[#118b89]/20 scale-105' : 'text-zinc-500 hover:bg-white/50'}`}
+                        >
+                            Aprovados
+                        </button>
+                        <button
                             onClick={() => setStatusFilter('REJECTED')}
-                        />
+                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap ${statusFilter === 'REJECTED' ? 'bg-[#118b89] text-white shadow-lg shadow-[#118b89]/20 scale-105' : 'text-zinc-500 hover:bg-white/50'}`}
+                        >
+                            Reprovados
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-5xl mx-auto px-4 mt-6 space-y-4">
+            <div className="max-w-6xl mx-auto px-6 mt-6 space-y-5">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-                        <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                        <p>Carregando unidades...</p>
+                        <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#118b89]" />
+                        <p className="font-medium">Carregando unidades...</p>
                     </div>
                 ) : filteredUnits.length === 0 ? (
-                    <div className="text-center py-20 text-zinc-400">
-                        <p>Nenhuma unidade encontrada.</p>
+                    <div className="flex flex-col items-center justify-center py-32 text-zinc-400">
+                        <div className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+                            <Building2 size={32} />
+                        </div>
+                        <h3 className="text-lg font-bold text-zinc-600 dark:text-zinc-300">Nenhuma unidade encontrada</h3>
+                        <p className="text-sm">Tente buscar por outro termo.</p>
                     </div>
                 ) : (
                     filteredUnits.map(unit => {
                         const unitProposals = proposals.filter(p => p.unidade_id === unit.id);
                         const isExpanded = expandedUnitId === unit.id;
 
+                        // Ordenar propostas (mais recentes primeiro para o visual "histórico")
+                        const sortedProposals = [...unitProposals].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
                         return (
-                            <GlassCard key={unit.id} className="overflow-hidden transition-all duration-300">
+                            <div
+                                key={unit.id}
+                                className={`bg-white dark:bg-zinc-900 rounded-[2.5rem] p-2 transition-all duration-500 ${isExpanded ? 'shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)]' : 'shadow-sm hover:shadow-md'}`}
+                            >
                                 <div
                                     onClick={() => setExpandedUnitId(isExpanded ? null : unit.id)}
-                                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                    className="p-6 flex items-center justify-between cursor-pointer rounded-[2rem] hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group"
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-500 dark:text-blue-400 shrink-0">
-                                            <Building2 size={20} />
+                                    <div className="flex items-center gap-5">
+                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${isExpanded ? 'bg-[#118b89] text-white' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 group-hover:bg-white group-hover:shadow-sm'}`}>
+                                            <Building2 size={24} />
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white">{unit.nome_unidade}</h3>
-                                            <p className="text-sm text-zinc-500 dark:text-zinc-400">{unit.clientName}</p>
-                                            <p className="text-xs text-zinc-400 mt-1">{unitProposals.length} propostas geradas</p>
+                                            <h3 className="font-bold text-xl text-zinc-900 dark:text-white tracking-tight leading-tight">{unit.nome_unidade}</h3>
+                                            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{unit.clientName}</p>
+                                            <p className="text-xs font-semibold text-zinc-400 mt-1">{unitProposals.length} propostas geradas</p>
                                         </div>
                                     </div>
-                                    <div className={`p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                        <ChevronDown size={20} className="text-zinc-500" />
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 transition-all duration-300 ${isExpanded ? 'bg-[#118b89]/10 text-[#118b89] rotate-180' : 'text-zinc-400 group-hover:bg-white group-hover:shadow-sm'}`}>
+                                        <ChevronDown size={20} />
                                     </div>
                                 </div>
 
                                 {isExpanded && (
-                                    <div className="border-t border-neutral-200 dark:border-white/10 bg-zinc-50/50 dark:bg-black/20 p-4 animate-slide-in">
-                                        <h4 className="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-3">Histórico de Propostas</h4>
-                                        {unitProposals.length === 0 ? (
-                                            <p className="text-sm text-zinc-500 italic">Nenhuma proposta encontrada para esta unidade.</p>
+                                    <div className="px-6 pb-6 pt-2 animate-in slide-in-from-top-4 fade-in duration-300">
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800"></div>
+                                            <span className="text-[10px] font-extrabold uppercase text-zinc-300 dark:text-zinc-600 tracking-widest">Histórico de Propostas</span>
+                                            <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800"></div>
+                                        </div>
+
+                                        {sortedProposals.length === 0 ? (
+                                            <div className="text-center py-8 bg-zinc-50 dark:bg-zinc-800/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 border-dashed">
+                                                <p className="text-sm font-medium text-zinc-400">Nenhuma proposta registrada.</p>
+                                            </div>
                                         ) : (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                {unitProposals.map(proposal => (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {sortedProposals.map(proposal => (
                                                     <button
                                                         key={proposal.id}
                                                         onClick={() => handleProposalClick(proposal.id)}
-                                                        className={`text-left p-3 rounded-xl border transition-all hover:shadow-md active:scale-95 flex flex-col gap-2 ${getProposalStatusColor(proposal.status)}`}
+                                                        className="bg-white dark:bg-black/20 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-white/5 shadow-sm hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 text-left group/card relative overflow-hidden"
                                                     >
-                                                        <div className="flex justify-between items-start w-full">
-                                                            <span className="font-bold text-sm">#{proposal.id}</span>
-                                                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-white/50 dark:bg-black/20 border border-black/5">
+                                                        <div className="flex justify-between items-start mb-4">
+                                                            <span className={`text-lg font-extrabold tracking-tight ${getProposalIdColor(proposal.status)}`}>
+                                                                #{proposal.id}
+                                                            </span>
+                                                            <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg ${getProposalStatusBadge(proposal.status)}`}>
                                                                 {getProposalStatusLabel(proposal.status)}
                                                             </span>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-xs opacity-80">
-                                                            <Calendar size={12} />
-                                                            <span>{new Date(proposal.created_at).toLocaleDateString('pt-BR')}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 text-xs font-semibold mt-auto">
-                                                            <DollarSign size={12} />
-                                                            <span>{proposal.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
+                                                                <Calendar size={14} />
+                                                                <span className="text-xs font-semibold">{new Date(proposal.created_at).toLocaleDateString('pt-BR')}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-200">
+                                                                <span className="text-lg font-bold">
+                                                                    {proposal.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </button>
                                                 ))}
@@ -205,72 +262,69 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                                         )}
                                     </div>
                                 )}
-                            </GlassCard>
+                            </div>
                         );
                     })
                 )}
             </div>
 
-            {/* Proposal Summary Modal (Unchanged) */}
-            {selectedProposalId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in flex flex-col max-h-[80vh]">
-                        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
-                            <h3 className="font-bold text-lg text-zinc-800 dark:text-white flex items-center gap-2">
-                                <FileText size={20} className="text-blue-500" />
-                                Resumo da Proposta #{selectedProposalId}
-                            </h3>
-                            <button onClick={() => setSelectedProposalId(null)} className="p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 transition-colors">
+            {/* Proposal Summary Modal - keeping same structure */}
+            {selectedProposalId && fullProposalDetails && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-white dark:bg-zinc-900 rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300 flex flex-col max-h-[85vh]"
+                    >
+                        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900">
+                            <div>
+                                <h3 className="font-bold text-2xl text-zinc-900 dark:text-white tracking-tight">
+                                    Proposta #{selectedProposalId}
+                                </h3>
+                                <p className="text-sm text-zinc-500">Detalhes completos do orçamento</p>
+                            </div>
+                            <button onClick={() => setSelectedProposalId(null)} className="w-10 h-10 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                            {loadingDetails || !fullProposalDetails ? (
-                                <div className="flex flex-col items-center justify-center py-10 text-zinc-500">
-                                    <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                                    <p>Carregando detalhes...</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    <div className="flex flex-wrap gap-4 justify-between items-center p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                                        <div>
-                                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Status</p>
-                                            <StatusBadge status={fullProposalDetails.status} />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Data</p>
-                                            <p className="font-semibold text-zinc-800 dark:text-zinc-200">{new Date(fullProposalDetails.created_at).toLocaleDateString('pt-BR')}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total</p>
-                                            <p className="font-bold text-lg text-zinc-900 dark:text-white">{fullProposalDetails.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                        </div>
+                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#F8FAFC] dark:bg-black/20">
+                            {/* Reusing existing details logic purely primarily styling updates on wrapper */}
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-white dark:bg-zinc-800 p-4 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 text-center">
+                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">Status</span>
+                                        <StatusBadge status={fullProposalDetails.status} />
                                     </div>
+                                    <div className="bg-white dark:bg-zinc-800 p-4 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 text-center">
+                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">Data</span>
+                                        <span className="font-bold text-zinc-700 dark:text-zinc-200">{new Date(fullProposalDetails.created_at).toLocaleDateString('pt-BR')}</span>
+                                    </div>
+                                    <div className="bg-white dark:bg-zinc-800 p-4 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 text-center">
+                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">Total</span>
+                                        <span className="font-extrabold text-[#118b89]">{fullProposalDetails.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                    </div>
+                                </div>
 
-                                    <div>
-                                        <h4 className="text-sm font-bold uppercase text-zinc-500 mb-3 flex items-center gap-2">
-                                            <Package size={16} /> Itens da Proposta
-                                        </h4>
-                                        <div className="space-y-2">
-                                            {fullProposalDetails.itens.map((item, idx) => (
-                                                <div key={idx} className="flex justify-between items-start p-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700/50">
-                                                    <div className="flex-1 pr-4">
-                                                        <p className="font-medium text-zinc-800 dark:text-zinc-200">{item.procedimento.nome}</p>
-                                                        <p className="text-xs text-zinc-500 mt-0.5">{item.modulo.nome} • {item.categoria.nome}</p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="font-mono font-bold text-zinc-700 dark:text-zinc-300">
-                                                            {(item.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                        </p>
-                                                        <p className="text-xs text-zinc-500">Qtd: {item.quantidade}</p>
-                                                    </div>
+                                <div>
+                                    <h4 className="text-sm font-extrabold uppercase text-zinc-400 mb-4 tracking-widest">Itens do Orçamento</h4>
+                                    <div className="space-y-3">
+                                        {fullProposalDetails.itens.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between items-center p-4 rounded-2xl bg-white dark:bg-zinc-800 border border-dashed border-zinc-200 dark:border-zinc-700">
+                                                <div>
+                                                    <p className="font-bold text-zinc-800 dark:text-zinc-100">{item.procedimento.nome}</p>
+                                                    <p className="text-xs font-semibold text-zinc-400 mt-1 uppercase">{item.modulo.nome}</p>
                                                 </div>
-                                            ))}
-                                        </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                                                        {(item.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </p>
+                                                    <p className="text-xs text-zinc-400">x{item.quantidade}</p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     </div>
                 </div>

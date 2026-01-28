@@ -109,6 +109,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     // Edit Client State
     const [isEditingClient, setIsEditingClient] = useState(false);
     const [selectedClientId, setSelectedClientId] = useState<string>(String(proposal.cliente.id));
+    const [selectedUnitId, setSelectedUnitId] = useState<number | undefined>(proposal.unidade_id);
     const [isSavingClient, setIsSavingClient] = useState(false);
     const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
@@ -126,6 +127,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         setItems(proposal.itens || []);
         setCurrentStatus(proposal.status);
         setSelectedClientId(String(proposal.cliente.id));
+        setSelectedUnitId(proposal.unidade_id);
 
         if (proposal.itens && Array.isArray(proposal.itens) && proposal.itens.length > 0) {
             const initialExpanded: Record<number, boolean> = {};
@@ -617,7 +619,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     const handleSaveClientChange = async () => {
         if (!selectedClientId) return;
         setIsSavingClient(true);
-        const success = await updateProposalClient(proposal.id, selectedClientId);
+        const success = await updateProposalClient(proposal.id, selectedClientId, selectedUnitId);
         setIsSavingClient(false);
         if (success.success) {
             setIsEditingClient(false);
@@ -843,11 +845,14 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                             </>
                         ) : (
                             <div className="w-full px-4 animate-fade-in">
-                                <h3 className="text-sm font-bold text-zinc-500 mb-3 uppercase tracking-wider">Selecionar Cliente</h3>
                                 <ClientSelector
                                     clients={catalog.clientes}
                                     selectedClientId={selectedClientId}
-                                    onSelect={setSelectedClientId}
+                                    selectedUnitId={selectedUnitId}
+                                    onSelect={(clientId, unitId) => {
+                                        setSelectedClientId(clientId);
+                                        setSelectedUnitId(unitId);
+                                    }}
                                     onCreateNew={() => setIsCreatingClient(true)}
                                     className="mb-4"
                                 />
