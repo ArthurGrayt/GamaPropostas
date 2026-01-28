@@ -85,6 +85,7 @@ class DynamicContentBuilder {
   private marginTop: number;
   private marginBottom: number;
   private options: PdfOptions;
+  private lastYPosition: number = 0;
 
   // New properties to replace (this as any) usage
   private introExames?: string;
@@ -385,6 +386,8 @@ class DynamicContentBuilder {
     // Draw Module Observation if exists
     // We get the final y position from autoTable
     const finalY = (this.doc as any).lastAutoTable.finalY + 20;
+    this.lastYPosition = (this.doc as any).lastAutoTable.finalY; // Initialize with table end
+
     const obsText = this.moduleObservations[module.title];
     let currentY: number;
 
@@ -410,6 +413,9 @@ class DynamicContentBuilder {
       this.doc.setFont('helvetica', 'normal');
       const splitObs = this.doc.splitTextToSize(obsText, pageWidth - (this.margin * 2));
       this.doc.text(splitObs, this.margin, currentY);
+
+      const obsHeight = this.doc.getTextDimensions(splitObs).h;
+      this.lastYPosition = currentY + obsHeight;
     }
   }
 
@@ -466,17 +472,21 @@ class DynamicContentBuilder {
     const pageCount = this.doc.getNumberOfPages();
     this.doc.setPage(pageCount);
 
-    let finalY = (this.doc as any).lastAutoTable?.finalY || 100;
+    let finalY = this.lastYPosition || 100;
     const pageHeight = this.doc.internal.pageSize.height;
     const pageWidth = this.doc.internal.pageSize.width;
 
-    // Ensure we have space (need ~150px due to extra spacing)
-    if (finalY + 160 > pageHeight - this.marginBottom) {
+    // Ensure we have space (need ~150px due to extra spacing - 40px padding + text + 25px gap + link)
+    // We want 40px spacing from the text above.
+    const spacing = 40;
+
+    // If not enough space for the block starting at finalY + spacing
+    if (finalY + spacing + 60 > pageHeight - this.marginBottom) {
       this.doc.addPage();
       finalY = this.marginTop;
     }
 
-    const closingY = finalY + 110;
+    const closingY = finalY + spacing;
 
     // 1. Validity Text
     this.doc.setFont('helvetica', 'normal');
