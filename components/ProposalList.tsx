@@ -335,7 +335,7 @@ export const ProposalList: React.FC<Props> = ({
                     <button
                         onClick={onOpenPdfEditor}
                         className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
-                        title="Editor de PDF"
+                        title="Editor de modelo padrão de PDF"
                     >
                         <span className="material-icons-round text-xl">description</span>
                     </button>

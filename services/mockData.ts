@@ -418,9 +418,23 @@ export const updateProposalStatus = async (id: number, status: ProposalStatus): 
         .update(updatePayload)
         .in('id', itemIds);
 
-      if (itemsError) console.error("Error cascading status to items:", itemsError);
     }
   }
+};
+
+export const updateProposalPdfConfig = async (id: number, config: PdfTexts): Promise<boolean> => {
+  const { error } = await supabase
+    .from('proposta')
+    .update({ custom_pdf_config: config })
+    .eq('id', id);
+
+  if (error) {
+    console.error("Error updating proposal PDF config:", error);
+    return false;
+  }
+
+  await logAction('UPDATE', `Atualizou configurações de PDF da proposta #${id}`, { proposal_id: id });
+  return true;
 };
 
 export const deleteProposal = async (proposalId: number): Promise<{ success: boolean; error?: string }> => {

@@ -4,8 +4,9 @@ import { createPortal } from 'react-dom';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
 import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector, cn } from './UIComponents';
 import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings, Share2, Building2, User, ChevronRight } from 'lucide-react';
-import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg, createUnit } from '../services/mockData';
+import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg, createUnit, PdfTexts, updateProposalPdfConfig } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
+import { PdfTextEditorModal } from './PdfTextEditorModal';
 
 interface Props {
     proposal: EnrichedProposal;
@@ -72,6 +73,14 @@ type GroupedData = Record<number, ModuleGroup>;
 type ItemStatusFilter = 'ALL' | ItemStatus;
 
 export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pdfTexts }) => {
+    // Merge Global Texts with Proposal Specific Config
+    const mergedPdfTexts = useMemo(() => {
+        return {
+            ...pdfTexts,
+            ...(proposal.custom_pdf_config || {})
+        };
+    }, [pdfTexts, proposal.custom_pdf_config]);
+
     const [items, setItems] = useState<EnrichedItem[]>(proposal?.itens || []);
     const [currentStatus, setCurrentStatus] = useState<ProposalStatus>(proposal?.status || 'PENDING');
     const [isUpdating, setIsUpdating] = useState(false);
@@ -93,6 +102,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isPdfEditorOpen, setIsPdfEditorOpen] = useState(false);
 
     // Add Item State
     const [isAddingItem, setIsAddingItem] = useState(false);
@@ -137,6 +147,15 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 }
             });
             setExpandedModules(initialExpanded);
+        }
+
+        // Initialize PDF Config State from merged config
+        if (proposal) {
+            const config = proposal.custom_pdf_config || {};
+            if (config.moduleObservations) setPdfModuleObservations(config.moduleObservations);
+            if (config.moduleTotals) setPdfModuleTotals(config.moduleTotals);
+            if (config.showItemObservations !== undefined) setPdfShowItemObservations(config.showItemObservations);
+            if (config.companyNameType) setPdfCompanyNameType(config.companyNameType);
         }
     }, [proposal]);
 
@@ -451,40 +470,40 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 companyNameType: pdfCompanyNameType,
                 moduleObservations: pdfModuleObservations,
                 showItemObservations: pdfShowItemObservations,
-                customIntro: pdfTexts.intro,
-                customFooter: pdfTexts.footer || undefined,
-                customHeaderTitle: pdfTexts.headerTitle,
-                customProposalPrefix: pdfTexts.proposalPrefix,
-                customTableHeaders: pdfTexts.tableHeaders,
+                customIntro: mergedPdfTexts.intro,
+                customFooter: mergedPdfTexts.footer || undefined,
+                customHeaderTitle: mergedPdfTexts.headerTitle,
+                customProposalPrefix: mergedPdfTexts.proposalPrefix,
+                customTableHeaders: mergedPdfTexts.tableHeaders,
                 moduleTotals: pdfModuleTotals,
-                customObservationLabel: pdfTexts.observationLabel,
+                customObservationLabel: mergedPdfTexts.observationLabel,
                 customAcceptanceLink: `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`,
                 // Institutional
-                whoWeAreTitle: pdfTexts.whoWeAreTitle,
-                whoWeAreText: pdfTexts.whoWeAreText,
-                ourTeamTitle: pdfTexts.ourTeamTitle,
-                teamCol1Title: pdfTexts.teamCol1Title,
-                teamCol1Text: pdfTexts.teamCol1Text,
-                teamCol2Title: pdfTexts.teamCol2Title,
-                teamCol2Text: pdfTexts.teamCol2Text,
-                whyChooseTitle: pdfTexts.whyChooseTitle,
-                whyChooseText: pdfTexts.whyChooseText,
+                whoWeAreTitle: mergedPdfTexts.whoWeAreTitle,
+                whoWeAreText: mergedPdfTexts.whoWeAreText,
+                ourTeamTitle: mergedPdfTexts.ourTeamTitle,
+                teamCol1Title: mergedPdfTexts.teamCol1Title,
+                teamCol1Text: mergedPdfTexts.teamCol1Text,
+                teamCol2Title: mergedPdfTexts.teamCol2Title,
+                teamCol2Text: mergedPdfTexts.teamCol2Text,
+                whyChooseTitle: mergedPdfTexts.whyChooseTitle,
+                whyChooseText: mergedPdfTexts.whyChooseText,
                 // Module Intros
-                introExames: pdfTexts.introExames,
-                introDocumentos: pdfTexts.introDocumentos,
-                introEsocial: pdfTexts.introEsocial,
-                introTreinamentos: pdfTexts.introTreinamentos,
-                introServicosSST: pdfTexts.introServicosSST,
+                introExames: mergedPdfTexts.introExames,
+                introDocumentos: mergedPdfTexts.introDocumentos,
+                introEsocial: mergedPdfTexts.introEsocial,
+                introTreinamentos: mergedPdfTexts.introTreinamentos,
+                introServicosSST: mergedPdfTexts.introServicosSST,
                 // Images
-                customCoverUrl: pdfTexts.coverImage,
-                customBackgroundUrl: pdfTexts.backgroundImage,
-                customBackCoverUrl: pdfTexts.backCoverImage,
-                customMargin: pdfTexts.margin,
-                customMarginTop: pdfTexts.marginTop,
-                customMarginBottom: pdfTexts.marginBottom,
-                customModuleTitles: pdfTexts.customModuleTitles,
-                footer: pdfTexts.footer,
-                coverLinks: pdfTexts.coverLinks
+                customCoverUrl: mergedPdfTexts.coverImage,
+                customBackgroundUrl: mergedPdfTexts.backgroundImage,
+                customBackCoverUrl: mergedPdfTexts.backCoverImage,
+                customMargin: mergedPdfTexts.margin,
+                customMarginTop: mergedPdfTexts.marginTop,
+                customMarginBottom: mergedPdfTexts.marginBottom,
+                customModuleTitles: mergedPdfTexts.customModuleTitles,
+                footer: mergedPdfTexts.footer,
+                coverLinks: mergedPdfTexts.coverLinks
             });
         } catch (error) {
             console.error("PDF Generation Error: ", error);
@@ -908,10 +927,16 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                         onClick={handleConfirmGeneratePdf}
                                     />
                                     <ActionButton
-                                        label="Configurar PDF"
+                                        label="Configurar observações do relatório"
                                         variant="neutral"
                                         icon={<Settings size={18} />}
                                         onClick={handleOpenConfigModal}
+                                    />
+                                    <ActionButton
+                                        label="Editor de PDF"
+                                        variant="neutral"
+                                        icon={<Edit2 size={18} />}
+                                        onClick={() => setIsPdfEditorOpen(true)}
                                     />
                                     <ActionButton
                                         label="Compartilhar Proposta"
@@ -1900,6 +1925,20 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                     </div>
                 )
             }
+
+            {isPdfEditorOpen && (
+                <PdfTextEditorModal
+                    isOpen={isPdfEditorOpen}
+                    onClose={() => setIsPdfEditorOpen(false)}
+                    onSave={async (newTexts) => {
+                        await updateProposalPdfConfig(proposal.id, newTexts);
+                        onUpdate();
+                        setIsPdfEditorOpen(false);
+                    }}
+                    initialTexts={mergedPdfTexts}
+                    defaultTexts={pdfTexts}
+                />
+            )}
 
         </div >
     );

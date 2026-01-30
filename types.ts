@@ -83,6 +83,7 @@ export interface Proposta {
   unidade_id?: number; // Linked Unit
   created_at: string;
   status: ProposalStatus;
+  custom_pdf_config?: any;
 }
 
 // Hydrated types for UI consumption (Joined data)
