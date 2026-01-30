@@ -298,8 +298,19 @@ class DynamicContentBuilder {
       this.doc.setTextColor('#333333');
 
       const splitText = this.doc.splitTextToSize(introText, pageWidth - (this.margin * 2));
-      this.doc.text(splitText, this.margin, yPos);
       const textHeight = this.doc.getTextDimensions(splitText).h;
+
+      // Check for overflow before drawing
+      const PAGE_HEIGHT = this.doc.internal.pageSize.getHeight();
+      const SAFE_BOTTOM = PAGE_HEIGHT - 40; // Reduced to ~40 to allow 10px distance from footer
+
+      if (yPos + textHeight > SAFE_BOTTOM) {
+        this.doc.addPage();
+        this.drawBackground(); // Ensure background is drawn on new page
+        yPos = this.marginTop + 20;
+      }
+
+      this.doc.text(splitText, this.margin, yPos);
       yPos += textHeight + 20;
     }
 
@@ -349,7 +360,8 @@ class DynamicContentBuilder {
         2: { width: 100, halign: 'right' }
       },
       // IMPORTANT: Bottom margin ensures table breaks page automatically if not enough space
-      margin: { left: this.margin, right: this.margin, top: this.marginTop, bottom: this.marginBottom + 20 },
+      // Reduced bottom margin to 40 to allow 10px gap from footer
+      margin: { left: this.margin, right: this.margin, top: this.marginTop, bottom: this.marginBottom + 40 },
       didParseCell: (data: any) => {
         // Explicitly align the header of the last column (Valor Unitário) to the right
         if (data.section === 'head' && data.column.index === 2) {
@@ -447,8 +459,9 @@ class DynamicContentBuilder {
       if (!baseText || baseText.trim() === '') {
         baseText = 'Gama Center SST - 2025';
       }
-      // Sanitize: Remove old placeholder if persisted
-      baseText = baseText.replace(' - Página X', '');
+      // Sanitize: Remove old placeholder or existing page numbers if persisted (Regex)
+      baseText = baseText.replace(/\s-\sP[áa]gina\s\d+.*$/i, '');
+      baseText = baseText.replace(' - Página X', ''); // Keep simple replace just in case
 
       // Format: "Base Text - Página X de Y"
       const footerText = `${baseText} - Página ${currentGlobalPage} de ${globalTotalPages}`;
@@ -457,12 +470,9 @@ class DynamicContentBuilder {
       const x = (A4_WIDTH - textWidth) / 2;
       const y = A4_HEIGHT - 20;
 
-      // Optional: Add a white background box for readability if using custom background
-      if (this.customBackgroundBase64) {
-        this.doc.setFillColor(255, 255, 255);
-        // Small padding
-        this.doc.rect(x - 4, y - 8, textWidth + 8, 10, 'F');
-      }
+      // Update: Draw a FULL WIDTH white strip at the bottom to ensure no background/previous footer shows through
+      this.doc.setFillColor(255, 255, 255);
+      this.doc.rect(0, A4_HEIGHT - 35, A4_WIDTH, 35, 'F');
 
       this.doc.text(footerText, x, y);
     }
@@ -795,7 +805,11 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     }
 
     // Draw Footer on Intro Page (Page 2)
-    const introFooterText = (options?.footer || 'Gama Center SST - 2025').replace(' - Página X', '');
+    // Sanitize
+    let introFooterText = (options?.footer || 'Gama Center SST - 2025');
+    introFooterText = introFooterText.replace(/\s-\sP[áa]gina\s\d+.*$/i, '');
+    introFooterText = introFooterText.replace(' - Página X', '');
+
     const totalPagesGlobal = 3 + dynamicDoc.getPageCount(); // Cover(1) + Intro(1) + Dynamic + Back(1)
     const introFooterFull = `${introFooterText} - Página 2 de ${totalPagesGlobal}`;
 
@@ -807,10 +821,10 @@ export const generateProposalPdf = async (proposal: EnrichedProposal, options?: 
     const introX = (pageWidth - introFooterWidth) / 2;
     const introY = pageHeight - 20;
 
-    if (bgBase64) {
-      introDoc.setFillColor(255, 255, 255);
-      introDoc.rect(introX - 4, introY - 8, introFooterWidth + 8, 10, 'F');
-    }
+    // Update: Draw FULL WIDTH white strip for Intro Page too
+    introDoc.setFillColor(255, 255, 255);
+    introDoc.rect(0, pageHeight - 35, pageWidth, 35, 'F');
+
     introDoc.text(introFooterFull, introX, introY);
 
     // Convert to PDF-Lib and Add
