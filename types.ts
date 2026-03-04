@@ -34,6 +34,7 @@ export interface Client {
   nome_fantasia: string; // Now required/primary
   razao_social: string; // Now required/primary
   cnpj?: string; // CNPJ
+  telefone?: string; // Telefone para contato
   avatar?: string;
   cliente_propostas?: number[];
   clientefrequente?: boolean;

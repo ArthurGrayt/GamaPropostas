@@ -100,6 +100,7 @@ function enrichProposal(
     nome: displayName,
     nome_fantasia: rawClient.nome_fantasia,
     razao_social: rawClient.razao_social,
+    telefone: rawClient.telefone,
     avatar: rawClient.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`,
     units: context.unidades.filter(u => String(u.empresaid) === String(rawClient.id))
   } : {
@@ -107,6 +108,7 @@ function enrichProposal(
     nome: displayName,
     nome_fantasia: displayName,
     razao_social: displayName,
+    telefone: undefined,
     avatar: 'https://ui-avatars.com/api/?name=Unknown'
   };
 
@@ -261,6 +263,7 @@ export const fetchCatalogData = async (): Promise<CatalogContext> => {
         nome: displayName,
         nome_fantasia: rawClient.nome_fantasia,
         razao_social: rawClient.razao_social,
+        telefone: rawClient.telefone,
         avatar: rawClient.avatar,
         cliente_propostas: rawClient.cliente_propostas || [],
         clientefrequente: rawClient.clientefrequente,
