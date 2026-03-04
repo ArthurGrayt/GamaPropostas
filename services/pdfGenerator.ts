@@ -48,6 +48,7 @@ export interface PdfOptions {
   customMarginBottom?: number;
 
   customModuleTitles?: Record<string, string>;
+  groupItemsInPdf?: boolean;
   footer?: string;
   coverLinks?: { id: string; x: number; y: number; w: number; h: number; url: string }[];
   customAcceptanceLink?: string;
@@ -315,15 +316,54 @@ class DynamicContentBuilder {
     }
 
     // Table Data
-    const tableBody = module.items.map((item, index) => {
+    const shouldGroupItems = this.options?.groupItemsInPdf !== false; // Default is true
+
+    let finalItemsToDraw = module.items;
+
+    if (shouldGroupItems) {
+      const grouped: Record<string, EnrichedItem> = {};
+      module.items.forEach(item => {
+        const procId = item.procedimento?.id || 0;
+        const price = item.preco || 0;
+        const obs = (item.observacao || '').trim().toLowerCase();
+        // Incluimos observacao na chave caso itens do mesmo serviço tenham obs diferentes (ex: nomes de pessoas)
+        const key = `${procId}-${price}-${obs}`;
+
+        if (!grouped[key]) {
+          grouped[key] = { ...item };
+        } else {
+          // Já existe, aumenta a quantidade e o total
+          grouped[key].quantidade += item.quantidade;
+          grouped[key].total += item.total;
+        }
+      });
+      finalItemsToDraw = Object.values(grouped);
+    }
+
+    const tableBody = finalItemsToDraw.map((item, index) => {
       let description = item.procedimento?.nome || 'Item sem nome';
+
+      // Se agrupou multiplos da mesma linha base
+      if (item.quantidade > 1) {
+        description += ` (x${item.quantidade})`;
+      }
+
       if (this.showItemObservations && item.observacao) {
         description += `\n${this.customObservationLabel || 'Observação:'} ${item.observacao}`;
       }
+
+      // O valor unitario ou total da linha? No gerador original ele puxava 'item.preco'
+      // O ideal aqui é mostrar preco total daquele agrupado ou unitario?
+      // Pelo código anterior, a tabela chama 'VALOR UNITÁRIO' na coluna 3. 
+      // Se agrupamos, mostramos Total * quantidade. Pra ficar consistente vamos formatar o item.total
+      // Mas para manter padrão, mostramos unitário ou total. Vamos usar item.total pois representa a linha consolidada.
+      // E mudaremos o título da coluna dinamicamente caso seja útil depois, mas por ora usamos total para bater a conta.
+      const linhaValor = shouldGroupItems ? item.total : (item.preco || 0);
+
       return [
         (index + 1).toString().padStart(2, '0'),
         description,
-        (item.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        linhaValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ];
     });
 

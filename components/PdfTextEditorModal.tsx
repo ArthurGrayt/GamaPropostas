@@ -55,7 +55,7 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
     defaultTexts
 }) => {
     const [localTexts, setLocalTexts] = useState<PdfTexts>(initialTexts);
-    const [activeTab, setActiveTab] = useState<'institutional' | 'modules' | 'images' | 'margins'>('institutional');
+    const [activeTab, setActiveTab] = useState<'institutional' | 'modules' | 'images' | 'margins' | 'grouping'>('institutional');
     const [activeImageSection, setActiveImageSection] = useState<'cover' | 'backCover' | 'background'>('cover');
     const [activeModule, setActiveModule] = useState<'Exames' | 'Documentos' | 'eSocial' | 'Treinamentos' | 'Serviços SST'>('Exames');
     const [isUploading, setIsUploading] = useState<string | null>(null);
@@ -229,6 +229,12 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                             className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'margins' ? 'bg-white shadow text-blue-600' : 'text-zinc-500 hover:text-zinc-700'}`}
                         >
                             Margens
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('grouping')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'grouping' ? 'bg-white shadow text-blue-600' : 'text-zinc-500 hover:text-zinc-700'}`}
+                        >
+                            Agrupamento
                         </button>
                     </div>
 
@@ -475,6 +481,34 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
                                     )}
                                 </div>
 
+                            </>
+                        ) : activeTab === 'grouping' ? (
+                            <>
+                                <h2 className="text-zinc-300 font-bold text-center mb-12 uppercase tracking-widest text-[10px] top-4 absolute w-full left-0">--- CONFIGURAÇÃO DE AGRUPAMENTO ---</h2>
+
+                                <div className="mt-8 font-sans animate-fade-in px-8">
+                                    <div className="flex items-center gap-2 mb-6 justify-center">
+                                        <List size={24} className="text-blue-500" />
+                                        <h3 className="font-bold text-zinc-800 text-lg">Agrupamento de Itens no PDF</h3>
+                                    </div>
+                                    <p className="text-sm text-zinc-500 mb-8 text-center max-w-lg mx-auto">Defina se itens idênticos (mesmo procedimento e preço) devem aparecer consolidados em uma única linha no relatório em PDF, ou se devem ser listados individualmente.</p>
+
+                                    <div className="max-w-md mx-auto bg-zinc-50 p-6 rounded-xl border border-zinc-200 flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-zinc-800">Agrupar itens iguais no PDF</span>
+                                            <span className="text-xs text-zinc-500">Recomendado para orçamentos grandes</span>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={localTexts.groupItemsInPdf ?? true}
+                                                onChange={(e) => setLocalTexts(prev => ({ ...prev, groupItemsInPdf: e.target.checked }))}
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
                             </>
                         ) : activeTab === 'margins' ? (
                             <>

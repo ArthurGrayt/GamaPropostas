@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { EnrichedProposal, EnrichedItem, ProposalStatus, ItemStatus, Modulo, Categoria, Procedimento, DocSeg } from '../types';
-import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector, cn } from './UIComponents';
+import { GlassCard, StatusBadge, ActionButton, Avatar, SearchBar, FilterPill, ClientSelector, cn, IOSSwitch } from './UIComponents';
 import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, AlertCircle, Trophy, Filter, Circle, PlayCircle, Eye, Send, UserCheck, MoreHorizontal, Edit2, Check, X, Loader2, CalendarClock, CalendarCheck, FileText, Archive, Trash2, Plus, Layers, List, Tag, Minus, Pencil, Calendar, Info, Settings, Share2, Building2, User, ChevronRight, Copy } from 'lucide-react';
 import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg, createUnit, PdfTexts, updateProposalPdfConfig } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
@@ -97,6 +97,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         modalidade: string;
     } | null>(null);
     const [isSavingItem, setIsSavingItem] = useState(false);
+
+    // Agrupamento de itens
+    const [groupSameItems, setGroupSameItems] = useState(true);
 
 
 
@@ -372,7 +375,10 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             }
         }
 
-        await updateItemStatus(itemId, newStatus);
+        const targetItem = filteredItems.find(i => i.uiKey === uiKey) as (EnrichedItem & { itemIds?: number[] }) | undefined;
+        const targetIds = (groupSameItems && targetItem?.itemIds) ? targetItem.itemIds : [itemId];
+
+        await updateItemStatus(targetIds, newStatus);
 
         // Reverse Sync: If all items become the SAME status, update the proposal status
         if (['APPROVED', 'PENDING', 'REJECTED'].includes(newStatus)) {
@@ -403,8 +409,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     const handleSaveItemChanges = async () => {
         if (!editingItem) return;
 
-        const itemToUpdate = items.find(i => i.uiKey === editingItem.uiKey);
-        if (!itemToUpdate) return;
+        const targetItem = filteredItems.find(i => i.uiKey === editingItem.uiKey) as (EnrichedItem & { itemIds?: number[] }) | undefined;
+        if (!targetItem) return;
 
         const newPrice = parseFloat(editingItem.preco);
         if (isNaN(newPrice) || newPrice < 0) {
@@ -412,8 +418,10 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             return;
         }
 
+        const targetIds = (groupSameItems && targetItem.itemIds) ? targetItem.itemIds : [targetItem.id];
+
         setIsSavingItem(true);
-        await updateItemDetails(itemToUpdate.id, {
+        await updateItemDetails(targetIds, {
             preco: newPrice,
         });
 
@@ -578,9 +586,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         }
     };
 
-    const handleDeleteItem = async (itemId: number) => {
-        if (window.confirm('Tem certeza que deseja remover este item da proposta?')) {
-            const success = await deleteItem(proposal.id, itemId);
+    const handleDeleteItem = async (itemId: number, uiKey: string) => {
+        const targetItem = filteredItems.find(i => i.uiKey === uiKey) as (EnrichedItem & { itemIds?: number[] }) | undefined;
+        const targetIds = (groupSameItems && targetItem?.itemIds) ? targetItem.itemIds : [itemId];
+
+        if (window.confirm(`Tem certeza que deseja remover ${targetIds.length > 1 ? 'estes itens' : 'este item'} da proposta?`)) {
+            const success = await deleteItem(proposal.id, targetIds);
             if (success) {
                 onUpdate();
             } else {
@@ -768,7 +779,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
     const filteredItems = useMemo(() => {
         const safeItems = Array.isArray(items) ? items : [];
-        return safeItems.filter(item => {
+        const filtered = safeItems.filter(item => {
             const matchesSearch =
                 (item.procedimento?.nome || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (item.modulo?.nome || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -778,7 +789,32 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
             return matchesSearch && matchesFilter;
         });
-    }, [items, searchQuery, activeItemFilter]);
+
+        if (!groupSameItems) return filtered;
+
+        // Lógica de agrupamento por procedimento, preço e status
+        const grouped: Record<string, EnrichedItem & { itemIds?: number[] }> = {};
+        filtered.forEach(item => {
+            if (!item.procedimento) return; // Segurança contra procedimentos nulos
+
+            const procId = item.procedimento.id;
+            const effectivePrice = item.preco ?? item.procedimento.preco_avulso ?? item.procedimento.preco ?? 0;
+            const status = item.status || 'PENDING';
+            const key = `${procId}-${effectivePrice}-${status}`;
+
+            if (!grouped[key]) {
+                grouped[key] = { ...item, itemIds: [item.id] };
+            } else {
+                grouped[key].quantidade += item.quantidade;
+                grouped[key].total += item.total;
+                // Evita IDs duplicados se vierem do mesmo registro unrolled
+                if (!grouped[key].itemIds?.includes(item.id)) {
+                    grouped[key].itemIds?.push(item.id);
+                }
+            }
+        });
+        return Object.values(grouped);
+    }, [items, searchQuery, activeItemFilter, groupSameItems]);
 
     const groupedItems = useMemo(() => {
         const groups: GroupedData = {};
@@ -1095,6 +1131,11 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                             {itemStatusKeys.map(status => (
                                 <FilterPill key={status} label={ITEM_STATUSES[status].label} isActive={activeItemFilter === status} onClick={() => setActiveItemFilter(status)} count={items.filter(i => i.status === status).length} />
                             ))}
+
+                            <div className="flex items-center gap-3 ml-auto px-4 py-2 bg-white/50 dark:bg-black/20 rounded-2xl border border-white/20 backdrop-blur-md">
+                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-tight">Agrupar itens iguais</span>
+                                <IOSSwitch checked={groupSameItems} onChange={() => setGroupSameItems(!groupSameItems)} />
+                            </div>
                         </div>
                     </div>
 
@@ -1140,10 +1181,17 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                                         return (
                                                             <GlassCard
                                                                 key={item.uiKey}
-                                                                className={`p-4 flex items-center justify-between group hover:border-blue-300/50 dark:hover:border-blue-500/30 relative transition-all hover:z-[70] ${openStatusMenu === item.uiKey || isEditing ? 'z-[50]' : 'z-10'} ${isEditing ? 'border-blue-400/80 dark:border-blue-500/70 ring-2 ring-blue-500/20' : ''}`}
+                                                                className={`p-4 rounded-2xl flex items-center justify-between group hover:border-blue-300/50 dark:hover:border-blue-500/30 relative transition-all hover:z-[70] ${openStatusMenu === item.uiKey || isEditing ? 'z-[50]' : 'z-10'} ${isEditing ? 'border-blue-400/80 dark:border-blue-500/70 ring-2 ring-blue-500/20' : ''}`}
                                                             >
                                                                 <div className="flex-1 pr-4">
-                                                                    <h4 className="font-semibold text-zinc-800 dark:text-zinc-100 mb-1.5">{item.procedimento?.nome || 'Procedimento'}</h4>
+                                                                    <h4 className="font-semibold text-zinc-800 dark:text-zinc-100 mb-1.5 flex items-center gap-2">
+                                                                        {item.procedimento?.nome || 'Procedimento'}
+                                                                        {item.quantidade > 1 && (
+                                                                            <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] font-black tracking-widest uppercase shadow-sm">
+                                                                                x{item.quantidade}
+                                                                            </span>
+                                                                        )}
+                                                                    </h4>
                                                                     {isEditing ? (
                                                                         <div className="space-y-2 text-xs">
                                                                             <div className="flex items-center gap-2">
@@ -1213,7 +1261,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                                                             <button onClick={() => handleOpenObservationModal(item)} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500" title="Adicionar Observação">
                                                                                 <Info size={14} />
                                                                             </button>
-                                                                            <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-500 transition-colors">
+                                                                            <button onClick={() => handleDeleteItem(item.id, item.uiKey)} className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-500 transition-colors">
                                                                                 <Trash2 size={14} />
                                                                             </button>
                                                                             <div className="relative group/status">
