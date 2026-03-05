@@ -1662,7 +1662,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                                 {configTab === 'NOMENCLATURA' && (
                                     <div className="space-y-6 animate-slide-in">
-                                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700">
+                                        <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-neutral-200 dark:border-zinc-700">
                                             <label className="flex items-center gap-3 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -1681,7 +1681,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                             <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-2">Nomenclatura da Empresa</h4>
                                             <label
                                                 onClick={() => setPdfCompanyNameType('NOME')}
-                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                                className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME' ? 'border-blue-600' : 'border-zinc-300'}`}>
@@ -1694,7 +1694,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
                                             <label
                                                 onClick={() => setPdfCompanyNameType('RAZAO_SOCIAL')}
-                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                                className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition-all ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'RAZAO_SOCIAL' ? 'border-blue-600' : 'border-zinc-300'}`}>
@@ -1714,7 +1714,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
                                             <label
                                                 onClick={() => setPdfCompanyNameType('NOME_FANTASIA')}
-                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                                                className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition-all ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm' : 'border-neutral-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${pdfCompanyNameType === 'NOME_FANTASIA' ? 'border-blue-600' : 'border-zinc-300'}`}>
@@ -1755,7 +1755,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                                         value={pdfModuleObservations[moduleTitle] || ''}
                                                         onChange={(e) => setPdfModuleObservations(prev => ({ ...prev, [moduleTitle]: e.target.value }))}
                                                         placeholder={`Observação para ${moduleTitle}...`}
-                                                        className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[80px] text-sm dark:text-white"
+                                                        className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-2xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[80px] text-sm dark:text-white"
                                                     />
                                                 </div>
                                             ))}
@@ -1770,7 +1770,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                         </p>
                                         <div className="space-y-3">
                                             {availableModules.map(moduleTitle => (
-                                                <label key={moduleTitle} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                                <label key={moduleTitle} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-neutral-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                                                     <span className="font-bold text-sm text-zinc-700 dark:text-zinc-300">{moduleTitle}</span>
                                                     <div className="relative inline-flex items-center cursor-pointer">
                                                         <input
@@ -1797,7 +1797,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                             Defina se itens idênticos (mesmo procedimento e preço) devem aparecer consolidados em uma única linha no relatório em PDF, ou se devem ser listados individualmente.
                                         </p>
 
-                                        <label className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                        <label className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-neutral-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-sm text-zinc-700 dark:text-zinc-300">Agrupar itens iguais no PDF</span>
                                                 <span className="text-xs text-zinc-500 dark:text-zinc-400">Consolida itens idênticos em uma única linha</span>

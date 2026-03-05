@@ -542,7 +542,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const PriceMenu: React.FC<{ proc: Procedimento, menu: 'main' | 'sidebar' }> = ({ proc, menu }) => {
     const tiers = (Object.keys(priceTiers) as PriceTierKey[]).filter(key => proc[key] != null);
     return (
-      <div ref={menu === 'main' ? priceMenuRef : sidebarPriceMenuRef} className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-zinc-800 rounded-lg shadow-2xl border dark:border-white/10 z-50 animate-fade-in p-1">
+      <div ref={menu === 'main' ? priceMenuRef : sidebarPriceMenuRef} className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-zinc-800 rounded-lg shadow-2xl border dark:border-white/10 z-50 animate-fade-in p-1">
         {tiers.map(tier => (
           <button key={tier} onClick={() => handlePriceTierSelect(proc.id, tier, menu)} className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-blue-500 hover:text-white flex items-center justify-between gap-3 text-zinc-700 dark:text-zinc-200">
             <span>{priceTiers[tier]}</span>
@@ -581,7 +581,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
         </div>
 
         <div className="flex flex-col md:flex-row items-center gap-3 mb-3">
-          <div className="w-full md:w-2/3 flex items-center gap-2">
+          <div className="w-full md:w-1/2 flex items-center gap-2">
             <ClientSelector
               clients={catalog.clientes}
               selectedUnitId={selectedUnitId}
@@ -589,38 +589,8 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
               onCreateNew={() => setIsCreatingClient(true)}
               className="flex-1"
             />
-            <div className="relative z-20">
-              <button
-                onClick={() => setModalityMenuOpen(!modalityMenuOpen)}
-                className="h-[52px] px-4 bg-zinc-100 dark:bg-zinc-800 border border-transparent dark:border-zinc-700 hover:border-blue-500 text-zinc-700 dark:text-zinc-300 rounded-xl flex flex-col items-start justify-center text-xs transition-all w-40"
-                title="Alterar modalidade padrão do cliente"
-              >
-                <span className="text-[10px] uppercase text-zinc-400 font-bold tracking-wider">Modalidade</span>
-                <span className="font-semibold text-sm truncate w-full text-left">{priceTiers[activeClientModality]}</span>
-              </button>
-
-              {modalityMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border dark:border-zinc-800 z-50 animate-fade-in overflow-hidden">
-                  {Object.keys(priceTiers).map((key) => {
-                    const tier = key as PriceTierKey;
-                    return (
-                      <button
-                        key={tier}
-                        onClick={() => handleManualModalityChange(tier)}
-                        className={cn(
-                          "w-full text-left text-sm px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 block text-zinc-700 dark:text-zinc-200 border-b border-zinc-100 dark:border-zinc-800 last:border-0",
-                          activeClientModality === tier ? "bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 font-medium" : ""
-                        )}
-                      >
-                        {priceTiers[tier]}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
           </div>
-          <div className="flex items-center gap-2 w-full md:w-1/3">
+          <div className="flex items-center gap-2 w-full md:w-1/2">
             <SearchBar
               value={searchQuery}
               onChange={setSearchQuery}
@@ -665,20 +635,23 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                     const unitPrice = selected?.manualPrice ?? (proc[selected?.priceTier || 'preco_avulso'] ?? proc.preco_avulso ?? 0);
 
                     return (
-                      <GlassCard key={proc.id} className={`p-4 shadow-md relative transition-all ${openPriceMenu === proc.id ? 'z-50' : 'z-0'}`}>
-                        <div className="flex justify-between items-start">
+                      <GlassCard key={proc.id} className={`p-4 rounded-2xl shadow-md relative transition-all ${openPriceMenu === proc.id ? 'z-50' : 'z-0'}`}>
+                        <div className="flex items-center justify-between">
                           <div className="flex-1 pr-4">
                             <h4 className="font-semibold mb-2">{proc.nome}</h4>
-                            <div className="flex items-center gap-2 relative">
-                              <button onClick={() => setOpenPriceMenu(openPriceMenu === proc.id ? null : proc.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
-                                <Tag size={12} />
-                                <span>{selected?.manualPrice !== undefined ? 'Manual' : priceTiers[selected?.priceTier || 'preco_avulso']}</span>
-                              </button>
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <button onClick={() => setOpenPriceMenu(openPriceMenu === proc.id ? null : proc.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                                  <Tag size={12} />
+                                  <span>{selected?.manualPrice !== undefined ? 'Manual' : priceTiers[selected?.priceTier || 'preco_avulso']}</span>
+                                </button>
+                                {openPriceMenu === proc.id && <PriceMenu proc={proc} menu="main" />}
+                              </div>
                               <span className="font-mono text-sm text-zinc-700 dark:text-zinc-200 font-bold">{unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                              {openPriceMenu === proc.id && <PriceMenu proc={proc} menu="main" />}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+
+                          <div className="flex items-center gap-2 shrink-0">
                             {selected ? (
                               <>
                                 <button onClick={() => handleItemQuantityChange(proc.id, -1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-red-200 dark:hover:bg-red-800 text-red-600"><Minus size={16} /></button>
@@ -686,7 +659,12 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                                 <button onClick={() => handleItemQuantityChange(proc.id, 1)} className="p-2 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-green-200 dark:hover:bg-green-800 text-green-600"><Plus size={16} /></button>
                               </>
                             ) : (
-                              <button onClick={() => handleItemSelect(proc.id)} className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold text-sm">Adicionar</button>
+                              <button
+                                onClick={() => handleItemSelect(proc.id)}
+                                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 text-sm"
+                              >
+                                Adicionar
+                              </button>
                             )}
                           </div>
                         </div>
@@ -772,14 +750,17 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                   </div>
                 )}
                 {summaryItems.map(item => (
-                  <div key={item.procedimento.id} className={`p-3 bg-white dark:bg-zinc-800/50 rounded-lg flex items-start gap-3 border dark:border-white/10 relative transition-all ${openSidebarPriceMenu === item.procedimento.id ? 'z-50' : 'z-0'}`}>
+                  <div key={item.procedimento.id} className={`p-3 bg-white dark:bg-zinc-800/50 rounded-2xl flex items-center gap-3 border dark:border-white/10 relative transition-all ${openSidebarPriceMenu === item.procedimento.id ? 'z-50' : 'z-0'}`}>
                     <div className="flex-1">
                       <p className="font-semibold text-sm">{item.procedimento.nome}</p>
-                      <div className="flex items-center gap-2 mt-1 relative">
-                        <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
-                          <Tag size={12} />
-                          <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
-                        </button>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="relative">
+                          <button onClick={() => setOpenSidebarPriceMenu(openSidebarPriceMenu === item.procedimento.id ? null : item.procedimento.id)} className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300">
+                            <Tag size={12} />
+                            <span>{item.manualPrice !== undefined ? 'Manual' : priceTiers[item.priceTier]}</span>
+                          </button>
+                          {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
+                        </div>
 
                         {editingPrice?.procId === item.procedimento.id ? (
                           <input
@@ -795,15 +776,16 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                         ) : (
                           <span onClick={() => setEditingPrice({ procId: item.procedimento.id, price: item.unitPrice.toString() })} className="font-mono text-sm flex items-center gap-1 cursor-pointer">{item.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <Edit2 size={12} className="text-zinc-400" /></span>
                         )}
-                        {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full">
+                    <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-full shrink-0">
                       <button onClick={() => handleItemQuantityChange(item.procedimento.id, -1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Minus size={14} /></button>
                       <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
                       <button onClick={() => handleItemQuantityChange(item.procedimento.id, 1)} className="p-1 rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>
                     </div>
-                    <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-red-500"><XIcon size={16} /></button>
+                    <button onClick={() => handleItemQuantityChange(item.procedimento.id, -Infinity)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors shrink-0" title="Remover item">
+                      <Trash size={16} />
+                    </button>
                   </div>
                 ))}
               </div>
