@@ -159,6 +159,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             if (config.moduleTotals) setPdfModuleTotals(config.moduleTotals);
             if (config.showItemObservations !== undefined) setPdfShowItemObservations(config.showItemObservations);
             if (config.companyNameType) setPdfCompanyNameType(config.companyNameType);
+            if (config.groupItemsInPdf !== undefined) setPdfGroupItems(config.groupItemsInPdf);
         }
     }, [proposal]);
 
@@ -432,8 +433,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
     // PDF Generation State
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES' | 'VALORES'>('NOMENCLATURA');
+    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES' | 'VALORES' | 'AGRUPAMENTO'>('NOMENCLATURA');
     const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
+    const [pdfGroupItems, setPdfGroupItems] = useState(true);
 
     const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
     const [pdfModuleTotals, setPdfModuleTotals] = useState<Record<string, boolean>>({});
@@ -471,6 +473,21 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         setIsConfigModalOpen(true);
     };
 
+    const handleSavePdfConfig = async () => {
+        if (!proposal) return;
+        const newConfig = {
+            ...proposal.custom_pdf_config,
+            moduleObservations: pdfModuleObservations,
+            moduleTotals: pdfModuleTotals,
+            showItemObservations: pdfShowItemObservations,
+            companyNameType: pdfCompanyNameType,
+            groupItemsInPdf: pdfGroupItems
+        };
+        await updateProposalPdfConfig(proposal.id, newConfig as any);
+        setIsConfigModalOpen(false);
+        onUpdate();
+    };
+
     const handleConfirmGeneratePdf = async () => {
         setIsGeneratingPdf(true);
         try {
@@ -484,6 +501,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 customProposalPrefix: mergedPdfTexts.proposalPrefix,
                 customTableHeaders: mergedPdfTexts.tableHeaders,
                 moduleTotals: pdfModuleTotals,
+                groupItemsInPdf: pdfGroupItems,
                 customObservationLabel: mergedPdfTexts.observationLabel,
                 customAcceptanceLink: `${window.location.origin}${window.location.pathname}?mode=shared&id=${proposal.id}`,
                 // Institutional
@@ -1632,6 +1650,13 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                     Valores dos Módulos
                                     {configTab === 'VALORES' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
                                 </button>
+                                <button
+                                    onClick={() => setConfigTab('AGRUPAMENTO')}
+                                    className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${configTab === 'AGRUPAMENTO' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
+                                >
+                                    Agrupamento
+                                    {configTab === 'AGRUPAMENTO' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
+                                </button>
                             </div>
 
                             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
@@ -1761,11 +1786,39 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                         </div>
                                     </div>
                                 )}
+
+                                {configTab === 'AGRUPAMENTO' && (
+                                    <div className="space-y-6 animate-slide-in">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <List size={20} className="text-blue-500" />
+                                            <h3 className="font-bold text-zinc-800 dark:text-white">Agrupamento de Itens no PDF</h3>
+                                        </div>
+                                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6 font-sans">
+                                            Defina se itens idênticos (mesmo procedimento e preço) devem aparecer consolidados em uma única linha no relatório em PDF, ou se devem ser listados individualmente.
+                                        </p>
+
+                                        <label className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-neutral-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-sm text-zinc-700 dark:text-zinc-300">Agrupar itens iguais no PDF</span>
+                                                <span className="text-xs text-zinc-500 dark:text-zinc-400">Consolida itens idênticos em uma única linha</span>
+                                            </div>
+                                            <div className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={pdfGroupItems}
+                                                    onChange={(e) => setPdfGroupItems(e.target.checked)}
+                                                />
+                                                <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 shrink-0">
                                 <button
-                                    onClick={() => setIsConfigModalOpen(false)}
+                                    onClick={handleSavePdfConfig}
                                     className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                                 >
                                     Salvar Configuração
