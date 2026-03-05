@@ -11,7 +11,7 @@ import { PdfTextEditorModal } from './PdfTextEditorModal';
 interface Props {
     proposal: EnrichedProposal;
     onBack: () => void;
-    onUpdate: () => void;
+    onUpdate: (showLoading?: boolean) => void;
     pdfTexts: {
         intro: string;
         footer: string;
@@ -239,7 +239,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         setIsUpdating(true);
         await updateProposalStatus(proposal.id, newStatus);
         setCurrentStatus(newStatus);
-        onUpdate();
+        onUpdate(false);
         setIsUpdating(false);
     };
 
@@ -279,7 +279,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             setCurrentStatus('APPROVED');
 
             setIsBulkDocSegModalOpen(false);
-            onUpdate();
+            onUpdate(false);
         } catch (error) {
             console.error("Error batch creating doc seg:", error);
             alert("Erro ao criar documentos em lote.");
@@ -990,9 +990,32 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                             <>
                                 <h3 className="text-sm font-bold uppercase text-zinc-400 tracking-wider mb-4">Ações</h3>
                                 <div className="flex flex-col gap-3">
-                                    <ActionButton label="Aprovada" variant={currentStatus === 'APPROVED' ? 'primary' : 'neutral'} icon={<CheckCircle size={18} />} onClick={() => handleStatusChange('APPROVED')} />
-                                    <ActionButton label="Reprovada" variant={currentStatus === 'REJECTED' ? 'danger' : 'neutral'} icon={<XCircle size={18} />} onClick={() => handleStatusChange('REJECTED')} />
-                                    <ActionButton label="Pendente" variant="neutral" icon={<Clock size={18} />} onClick={() => handleStatusChange('PENDING')} />
+                                    <div className="flex bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-xl shadow-inner border border-zinc-200/50 dark:border-white/5">
+                                        <button
+                                            onClick={() => handleStatusChange('APPROVED')}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors border ${currentStatus === 'APPROVED' ? 'bg-white dark:bg-zinc-700 text-emerald-600 dark:text-emerald-400 shadow-sm border-black/5 dark:border-white/5' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 opacity-80 hover:opacity-100'}`}
+                                            title="Aprovar Proposta"
+                                        >
+                                            <CheckCircle size={16} className={currentStatus === 'APPROVED' ? 'animate-pulse text-emerald-500' : ''} />
+                                            Aprovada
+                                        </button>
+                                        <button
+                                            onClick={() => handleStatusChange('REJECTED')}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors border ${currentStatus === 'REJECTED' ? 'bg-white dark:bg-zinc-700 text-red-600 dark:text-red-400 shadow-sm border-black/5 dark:border-white/5' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 opacity-80 hover:opacity-100'}`}
+                                            title="Reprovar Proposta"
+                                        >
+                                            <XCircle size={16} className={currentStatus === 'REJECTED' ? 'animate-pulse text-red-500' : ''} />
+                                            Reprovada
+                                        </button>
+                                        <button
+                                            onClick={() => handleStatusChange('PENDING')}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors border ${currentStatus === 'PENDING' ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm border-black/5 dark:border-white/5' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 opacity-80 hover:opacity-100'}`}
+                                            title="Marcar como Pendente"
+                                        >
+                                            <Clock size={16} className={currentStatus === 'PENDING' ? 'animate-pulse text-blue-500' : ''} />
+                                            Pendente
+                                        </button>
+                                    </div>
 
                                     <div className="w-full h-px bg-neutral-200 dark:bg-zinc-700/50 my-2"></div>
 

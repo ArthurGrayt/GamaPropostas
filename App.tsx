@@ -168,8 +168,8 @@ const MainApp: React.FC = () => {
     fetchDetail();
   }, [selectedId]);
 
-  const refreshData = async () => {
-    setIsLoading(true);
+  const refreshData = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     const data = await getProposals();
     setProposals(data);
 
@@ -178,7 +178,7 @@ const MainApp: React.FC = () => {
       const detail = await getProposalById(selectedId);
       if (detail) setSelectedProposal(detail);
     }
-    setIsLoading(false);
+    if (showLoading) setIsLoading(false);
   };
 
   const navigateToDetail = (id: number) => {
