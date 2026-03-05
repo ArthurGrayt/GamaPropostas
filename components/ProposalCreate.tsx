@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit } from '../services/mockData';
+import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit, getCollaboratorCountByUnit } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
-import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User, FileText, AlertTriangle, Users } from 'lucide-react';
 import { TextImportModal } from './TextImportModal';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
 
@@ -93,6 +93,19 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [cartSortOrder, setCartSortOrder] = useState<CartSortOrder>('RECENT');
   const [isTextImportOpen, setIsTextImportOpen] = useState(false);
 
+  // Estado do modal de confirmação de colaboradores (Psicossocial/Psicológica)
+  const [isCollabWarningOpen, setIsCollabWarningOpen] = useState(false);
+  const [collabWarningData, setCollabWarningData] = useState<{
+    unitName: string;
+    clientName: string;
+    totalCollab: number;
+    chosenQty: number;
+    itemName: string;
+  } | null>(null);
+
+  // Cache da contagem de colaboradores da unidade selecionada
+  const [unitCollabCount, setUnitCollabCount] = useState<number>(0);
+
   useEffect(() => {
     const load = async () => {
       const data = await fetchCatalogData();
@@ -137,7 +150,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
   // Bloqueio de scroll global quando modais estão abertos
   useEffect(() => {
-    const isAnyModalOpen = isCreatingClient || isCreatingProcedure || showModalityConfirmation.show || isTextImportOpen || submitting;
+    const isAnyModalOpen = isCreatingClient || isCreatingProcedure || showModalityConfirmation.show || isTextImportOpen || submitting || isCollabWarningOpen;
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -146,7 +159,22 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isCreatingClient, isCreatingProcedure, showModalityConfirmation.show, isTextImportOpen, submitting]);
+  }, [isCreatingClient, isCreatingProcedure, showModalityConfirmation.show, isTextImportOpen, submitting, isCollabWarningOpen]);
+
+  // Busca a contagem de colaboradores quando a unidade selecionada muda
+  useEffect(() => {
+    const fetchCollabCount = async () => {
+      // Se há unidade selecionada, busca a contagem de colaboradores
+      if (selectedUnitId) {
+        const count = await getCollaboratorCountByUnit(selectedUnitId);
+        setUnitCollabCount(count);
+      } else {
+        // Se não há unidade, zera a contagem
+        setUnitCollabCount(0);
+      }
+    };
+    fetchCollabCount();
+  }, [selectedUnitId]);
 
   // Persistence Effect
   useEffect(() => {
@@ -407,7 +435,43 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     setIsTextImportOpen(false);
   };
 
+  // Função auxiliar para normalizar texto (remove acentos e converte pra minúsculo)
+  const normalizeText = (text: string) => {
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  };
+
+  // Verifica se o nome do procedimento contém "psicossocial" ou "psicologica"
+  const isPsychItem = (name: string) => {
+    const normalized = normalizeText(name);
+    return normalized.includes('psicossocial') || normalized.includes('psicologica');
+  };
+
+  // Função que de fato submete a proposta (chamada após validação ou confirmação do modal)
+  const doCreateProposal = async () => {
+    setSubmitting(true);
+
+    // Monta o payload com os itens do carrinho
+    const itemsPayload = summaryItems.map(item => ({
+      procedimentoId: item.procedimento.id,
+      quantidade: item.quantity,
+      preco: item.unitPrice,
+    }));
+
+    // Cria a proposta no backend
+    const success = await createProposal(selectedClientId, itemsPayload, selectedUnitId || undefined);
+
+    if (success) {
+      // Limpa persistência do carrinho ao criar com sucesso
+      localStorage.removeItem('SECUREFLOW_CART_STATE');
+      onSuccess();
+    } else {
+      alert('Ocorreu um erro ao criar a proposta. Tente novamente.');
+      setSubmitting(false);
+    }
+  };
+
   const handleCreateProposal = async () => {
+    // Validações básicas de cliente e itens
     if (!selectedClientId) {
       alert('Por favor, selecione um cliente.');
       return;
@@ -417,24 +481,41 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       return;
     }
 
-    setSubmitting(true);
+    // Localiza itens psicossociais/psicológicos no carrinho
+    const psychItems = summaryItems.filter(item => isPsychItem(item.procedimento.nome));
 
-    const itemsPayload = summaryItems.map(item => ({
-      procedimentoId: item.procedimento.id,
-      quantidade: item.quantity,
-      preco: item.unitPrice,
-    }));
+    // Se houver itens psicossociais E uma unidade selecionada, valida a quantidade
+    if (psychItems.length > 0 && selectedUnitId) {
+      // Busca quantos colaboradores a unidade possui
+      const collabCount = await getCollaboratorCountByUnit(selectedUnitId);
 
-    const success = await createProposal(selectedClientId, itemsPayload, selectedUnitId || undefined);
+      if (collabCount > 0) {
+        // Soma a quantidade total de itens psicossociais selecionados
+        const totalPsychQty = psychItems.reduce((acc, item) => acc + item.quantity, 0);
 
-    if (success) {
-      // Clear persistence on success
-      localStorage.removeItem('SECUREFLOW_CART_STATE');
-      onSuccess();
-    } else {
-      alert('Ocorreu um erro ao criar a proposta. Tente novamente.');
-      setSubmitting(false);
+        // Se a quantidade é menor que o total de colaboradores, exibe o modal
+        if (totalPsychQty < collabCount) {
+          // Busca o nome da unidade e do cliente para exibir no modal
+          const unit = catalog.unidades.find(u => u.id === selectedUnitId);
+          const client = catalog.clientes.find(c => String(c.id) === selectedClientId);
+
+          setCollabWarningData({
+            unitName: unit?.nome_unidade || 'Unidade',
+            clientName: client?.nome || client?.nome_fantasia || 'Empresa',
+            totalCollab: collabCount,
+            chosenQty: totalPsychQty,
+            itemName: psychItems.map(p => p.procedimento.nome).join(', '),
+          });
+          // Fecha o carrinho antes de exibir o modal
+          setIsCartOpen(false);
+          setIsCollabWarningOpen(true);
+          return; // Interrompe e aguarda confirmação do usuário
+        }
+      }
     }
+
+    // Se não houver necessidade de validação, cria normalmente
+    await doCreateProposal();
   };
 
   const handleCreateClient = async () => {
@@ -774,6 +855,21 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                           </button>
                           {openSidebarPriceMenu === item.procedimento.id && <PriceMenu proc={item.procedimento} menu="sidebar" />}
                         </div>
+                        {/* Ícone de aviso de colaboradores — aparece quando item é psicossocial/psicológica e qtde < colaboradores */}
+                        {isPsychItem(item.procedimento.nome) && unitCollabCount > 0 && item.quantity < unitCollabCount && (
+                          <div className="relative group/collab-warn">
+                            <div className="p-0.5 text-amber-500 cursor-help animate-pulse">
+                              <AlertTriangle size={14} />
+                            </div>
+                            {/* Tooltip ao hover */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/collab-warn:block z-[60] w-56 pointer-events-none">
+                              <div className="bg-zinc-900 dark:bg-zinc-700 text-white text-xs rounded-lg py-2 px-3 shadow-lg leading-relaxed">
+                                A unidade possui <strong className="text-amber-400">{unitCollabCount}</strong> colaboradores, mas apenas <strong className="text-amber-400">{item.quantity}</strong> {item.quantity === 1 ? 'foi selecionado' : 'foram selecionados'}.
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-900 dark:border-t-zinc-700"></div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {editingPrice?.procId === item.procedimento.id ? (
                           <input
@@ -1133,6 +1229,58 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                   className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-colors"
                 >
                   Sim, Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Colaboradores (Psicossocial/Psicológica) */}
+      {isCollabWarningOpen && collabWarningData && (
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10 animate-scale-in">
+            <div className="p-6 text-center">
+              {/* Ícone de alerta */}
+              <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto mb-4">
+                <AlertTriangle size={28} />
+              </div>
+              {/* Título do modal */}
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-3">Atenção — Quantidade de Colaboradores</h3>
+              {/* Mensagem detalhada */}
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2 leading-relaxed">
+                A Unidade <strong className="text-zinc-800 dark:text-white">{collabWarningData.unitName}</strong> da empresa <strong className="text-zinc-800 dark:text-white">{collabWarningData.clientName}</strong> possui <strong className="text-amber-600 dark:text-amber-400">{collabWarningData.totalCollab}</strong> colaboradores.
+              </p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
+                Deseja confirmar somente <strong className="text-amber-600 dark:text-amber-400">{collabWarningData.chosenQty}</strong>?
+              </p>
+              {/* Detalhe do item */}
+              <div className="flex items-center gap-2 justify-center mb-6 px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                <Users size={16} className="text-blue-500 shrink-0" />
+                <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{collabWarningData.itemName}</span>
+              </div>
+              {/* Botões de ação */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    // Fecha o modal e reabre o carrinho para continuar editando
+                    setIsCollabWarningOpen(false);
+                    setCollabWarningData(null);
+                    setIsCartOpen(true);
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    setIsCollabWarningOpen(false);
+                    setCollabWarningData(null);
+                    await doCreateProposal();
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-500 shadow-lg shadow-amber-600/20 transition-colors"
+                >
+                  Continuar mesmo assim
                 </button>
               </div>
             </div>

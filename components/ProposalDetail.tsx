@@ -2090,6 +2090,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 )
             }
 
+
         </div >
     );
 };

@@ -1139,3 +1139,28 @@ export const uploadPdfAsset = async (file: File): Promise<{ publicUrl: string | 
     return { publicUrl: null, error: error.message || String(error) };
   }
 };
+
+// Conta quantos colaboradores pertencem a uma unidade específica
+// Consulta a tabela "colaboradores" filtrando pela coluna "unidade"
+export const getCollaboratorCountByUnit = async (unitId: number): Promise<number> => {
+  try {
+    // Faz a contagem direta na tabela colaboradores filtrando pelo id da unidade
+    const { count, error } = await supabase
+      .from('colaboradores')
+      .select('*', { count: 'exact', head: true })
+      .eq('unidade', unitId);
+
+    // Se houver erro, loga e retorna 0
+    if (error) {
+      console.error('Erro ao contar colaboradores:', error);
+      return 0;
+    }
+
+    // Retorna a contagem (ou 0 caso seja null)
+    return count ?? 0;
+  } catch (err) {
+    // Captura exceções inesperadas e retorna 0
+    console.error('Exceção ao contar colaboradores:', err);
+    return 0;
+  }
+};
