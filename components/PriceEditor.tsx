@@ -230,7 +230,7 @@ export const PriceEditor: React.FC<Props> = ({ onBack }) => {
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-4">
                         <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"><ArrowLeft /></button>
-                        <h1 className="text-xl font-bold">Gerenciamento de Itens</h1>
+                        <h1 className="text-xl font-bold">Tabela de Preços</h1>
                     </div>
                     <button
                         onClick={() => setIsCreating(true)}

@@ -120,22 +120,6 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                         </div>
                     </div>
 
-                    <div className="flex-1 max-w-lg">
-                        <div className="relative group">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#118b89] transition-colors" size={20} />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Buscar unidade ou cliente..."
-                                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-zinc-900 rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-[#118b89]/20 text-zinc-700 dark:text-zinc-200 font-medium placeholder:text-zinc-400 transition-all"
-                            />
-                        </div>
-                    </div>
-
-                    <button className="hidden md:flex w-10 h-10 rounded-full items-center justify-center bg-white dark:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors shadow-sm">
-                        <span className="material-icons-round text-xl">dark_mode</span>
-                    </button>
                 </div>
 
                 {/* Filters */}
@@ -166,6 +150,22 @@ export const ClientManagement: React.FC<Props> = ({ onBack }) => {
                         >
                             Reprovados
                         </button>
+                    </div>
+
+                    {/* Barra de Pesquisa Integrada nos Filtros */}
+                    <div className="flex-1 max-w-xs ml-auto">
+                        <div className="relative group">
+                            {/* Ícone de busca posicionado dentro do input */}
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#118b89] transition-colors" size={16} />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Buscar..."
+                                // Estilização para combinar com os filtros (pills)
+                                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-700 shadow-sm focus:ring-2 focus:ring-[#118b89]/20 text-sm text-zinc-700 dark:text-zinc-200 font-medium placeholder:text-zinc-400 transition-all"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

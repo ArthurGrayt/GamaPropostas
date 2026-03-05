@@ -44,7 +44,7 @@ export const SearchBar: React.FC<{
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-14 pl-14 pr-12 rounded-[1.5rem] bg-white/80 dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-200 text-charcoal dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 transition-all backdrop-blur-md"
+        className="w-full h-14 pl-14 pr-12 rounded-2xl bg-white/80 dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-200 text-charcoal dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 transition-all backdrop-blur-md"
       />
       {value && (
         <button

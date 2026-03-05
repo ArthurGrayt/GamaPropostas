@@ -189,8 +189,8 @@ export const PdfTextEditorModal: React.FC<PdfTextEditorModalProps> = ({
     const currentModuleIntroKey = getModuleKey(activeModule);
 
     return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-stone-100 dark:bg-zinc-900 w-full max-w-5xl h-[95vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in border border-white/20">
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in overflow-hidden">
+            <div className="bg-stone-100 dark:bg-zinc-900 w-full max-w-5xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in border border-white/20">
 
                 {/* Header */}
                 <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900">

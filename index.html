@@ -49,16 +49,14 @@
             xl: "3rem",
             full: "9999px"
           },
-          animation: {
-            'pulse-slow': 'pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            'fade-in': 'fadeIn 0.5s ease-out forwards',
-            'backdrop-fade-in': 'backdropFadeIn 0.3s ease-out forwards',
-            'cart-slide-in': 'cartSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-          },
           keyframes: {
             fadeIn: {
-              '0%': { opacity: '0', transform: 'translateY(10px)' },
-              '100%': { opacity: '1', transform: 'translateY(0)' },
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            },
+            scaleIn: {
+              '0%': { opacity: '0', transform: 'scale(0.95)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
             },
             backdropFadeIn: {
               'from': { opacity: '0' },
@@ -68,6 +66,13 @@
               'from': { transform: 'translateX(100%)' },
               'to': { transform: 'translateX(0)' },
             }
+          },
+          animation: {
+            'pulse-slow': 'pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'fade-in': 'fadeIn 0.3s ease-out forwards',
+            'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'backdrop-fade-in': 'backdropFadeIn 0.3s ease-out forwards',
+            'cart-slide-in': 'cartSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
           },
           transitionTimingFunction: {
             'spring': 'cubic-bezier(0.175, 0.885, 0.32, 1.275)',

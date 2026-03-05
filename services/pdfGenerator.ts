@@ -343,11 +343,6 @@ class DynamicContentBuilder {
     const tableBody = finalItemsToDraw.map((item, index) => {
       let description = item.procedimento?.nome || 'Item sem nome';
 
-      // Se agrupou multiplos da mesma linha base
-      if (item.quantidade > 1) {
-        description += ` (x${item.quantidade})`;
-      }
-
       if (this.showItemObservations && item.observacao) {
         description += `\n${this.customObservationLabel || 'Observação:'} ${item.observacao}`;
       }
@@ -359,11 +354,21 @@ class DynamicContentBuilder {
       // Mas para manter padrão, mostramos unitário ou total. Vamos usar item.total pois representa a linha consolidada.
       // E mudaremos o título da coluna dinamicamente caso seja útil depois, mas por ora usamos total para bater a conta.
       const linhaValor = shouldGroupItems ? item.total : (item.preco || 0);
+      const valorFormatado = linhaValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      if (shouldGroupItems) {
+        return [
+          (index + 1).toString().padStart(2, '0'),
+          item.quantidade.toString(),
+          description,
+          valorFormatado
+        ];
+      }
 
       return [
         (index + 1).toString().padStart(2, '0'),
         description,
-        linhaValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        valorFormatado
       ];
     });
 
@@ -373,19 +378,47 @@ class DynamicContentBuilder {
     if (shouldShowTotal) {
       const totalValue = module.items.reduce((sum, item) => sum + (item.preco || 0), 0);
       const totalFormatted = totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      tableBody.push([
-        '',
-        '',
-        `VALOR TOTAL : ${totalFormatted}`
-      ]);
+
+      if (shouldGroupItems) {
+        tableBody.push([
+          '',
+          '',
+          '',
+          `VALOR TOTAL : ${totalFormatted}`
+        ]);
+      } else {
+        tableBody.push([
+          '',
+          '',
+          `VALOR TOTAL : ${totalFormatted}`
+        ]);
+      }
     }
 
     // Draw Table
-    const headers = [
+    const headers = shouldGroupItems ? [
+      this.customTableHeaders?.col1 || 'ITEM',
+      'Qtde',
+      this.customTableHeaders?.col2 || 'DESCRIÇÃO DO DOCUMENTO',
+      this.customTableHeaders?.col3 || 'VALOR UNITÁRIO'
+    ] : [
       this.customTableHeaders?.col1 || 'ITEM',
       this.customTableHeaders?.col2 || 'DESCRIÇÃO DO DOCUMENTO',
       this.customTableHeaders?.col3 || 'VALOR UNITÁRIO'
     ];
+
+    const columnStylesConfig = shouldGroupItems ? {
+      0: { width: 40, halign: 'center' },
+      1: { width: 30, halign: 'center' }, // New Qtde column
+      2: {},
+      3: { width: 100, halign: 'right' }
+    } : {
+      0: { width: 40, halign: 'center' },
+      1: {},
+      2: { width: 100, halign: 'right' }
+    };
+
+    const valueColIndex = shouldGroupItems ? 3 : 2;
 
     (this.doc as any).autoTable({
       startY: yPos,
@@ -394,17 +427,13 @@ class DynamicContentBuilder {
       theme: 'grid',
       headStyles: { fillColor: '#EAEAEA', textColor: '#333333', fontStyle: 'bold', lineColor: '#CCCCCC', lineWidth: 0.1 },
       styles: { fontSize: 10, cellPadding: 8, valign: 'middle', lineColor: '#CCCCCC', lineWidth: 0.1, textColor: '#333333' },
-      columnStyles: {
-        0: { width: 40, halign: 'center' },
-        1: {},
-        2: { width: 100, halign: 'right' }
-      },
+      columnStyles: columnStylesConfig as any,
       // IMPORTANT: Bottom margin ensures table breaks page automatically if not enough space
       // Reduced bottom margin to 40 to allow 10px gap from footer
       margin: { left: this.margin, right: this.margin, top: this.marginTop, bottom: this.marginBottom + 40 },
       didParseCell: (data: any) => {
         // Explicitly align the header of the last column (Valor Unitário) to the right
-        if (data.section === 'head' && data.column.index === 2) {
+        if (data.section === 'head' && data.column.index === valueColIndex) {
           data.cell.styles.halign = 'right';
         }
 
@@ -412,7 +441,7 @@ class DynamicContentBuilder {
         if (data.section === 'body' && shouldShowTotal && data.row.index === tableBody.length - 1) {
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.lineWidth = 0;
-          // If the cell is empty (the first two columns), we explicitly ensure no borders 
+          // If the cell is empty (the first columns), we explicitly ensure no borders 
           // but lineWidth 0 usually handles it.
         }
       },

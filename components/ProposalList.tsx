@@ -319,7 +319,7 @@ export const ProposalList: React.FC<Props> = ({
                     <button
                         onClick={onNavigateToClients}
                         className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
-                        title="Gerenciar Clientes"
+                        title="Gerenciar Unidades"
                     >
                         <span className="material-icons-round">person</span>
                     </button>
@@ -327,9 +327,9 @@ export const ProposalList: React.FC<Props> = ({
                     <button
                         onClick={onNavigateToSettings}
                         className="w-11 h-11 rounded-2xl glass-panel bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:scale-110 active:scale-95 transition-all"
-                        title="Configurações"
+                        title="Tabela de Preços"
                     >
-                        <span className="material-icons-round text-xl">tune</span>
+                        <span className="material-icons-round text-xl">payments</span>
                     </button>
 
                     <button

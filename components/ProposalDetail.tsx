@@ -110,6 +110,19 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     // Add Item State
     const [isAddingItem, setIsAddingItem] = useState(false);
     const [catalog, setCatalog] = useState<CatalogContext>({ modulos: [], categorias: [], procedimentos: [], clientes: [] });
+
+    // Modais e Estados de Configuração
+    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES' | 'VALORES' | 'AGRUPAMENTO'>('NOMENCLATURA');
+    const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
+    const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
+    const [pdfModuleTotals, setPdfModuleTotals] = useState<Record<string, boolean>>({});
+    const [pdfShowItemObservations, setPdfShowItemObservations] = useState(true);
+    const [pdfGroupItems, setPdfGroupItems] = useState(true);
+
+    const [isDeadlineModalOpen, setIsDeadlineModalOpen] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [isDocSegModalOpen, setIsDocSegModalOpen] = useState(false);
     const [newItemSearch, setNewItemSearch] = useState('');
     const [selectedProcedure, setSelectedProcedure] = useState<Procedimento | null>(null);
     const [newItemDetails, setNewItemDetails] = useState({
@@ -170,6 +183,19 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         };
         loadCatalog();
     }, []);
+
+    // Bloqueio de scroll global quando modais estão abertos
+    useEffect(() => {
+        const isAnyModalOpen = isObservationModalOpen || isConfigModalOpen || isPdfEditorOpen || isEditingClient || isDeleting || isUpdating;
+        if (isAnyModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isObservationModalOpen, isConfigModalOpen, isPdfEditorOpen, isEditingClient, isDeleting, isUpdating]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -263,8 +289,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         }
     };
 
-    // Doc Seg Modal State
-    const [isDocSegModalOpen, setIsDocSegModalOpen] = useState(false);
+    // Doc Seg Modal State (Declarations moved up)
     const [docSegItem, setDocSegItem] = useState<EnrichedItem | null>(null);
     const [docSegPrazo, setDocSegPrazo] = useState('');
     const [docSegObs, setDocSegObs] = useState('');
@@ -277,22 +302,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     // Hover Module State (for z-index/overflow handling)
     const [hoveredModuleId, setHoveredModuleId] = useState<number | null>(null);
 
-    // Deadline Config Modal State
-    const [isDeadlineModalOpen, setIsDeadlineModalOpen] = useState(false);
+    // Deadline Config Modal State (Declarations moved up)
     const [globalDeadline, setGlobalDeadline] = useState('');
     const [itemDeadlines, setItemDeadlines] = useState<Record<number, string>>({});
     const [isSavingDeadlines, setIsSavingDeadlines] = useState(false);
 
-    useEffect(() => {
-        if (isDeadlineModalOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
-        return () => {
-            document.body.style.overflow = '';
-        };
-    }, [isDeadlineModalOpen]);
+    // Redundant scroll lock useEffect removed (Managed globally now)
 
     const openDeadlineModal = () => {
         // Initialize with existing deadlines
@@ -431,21 +446,12 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
         onUpdate(); // Refresh all data
     };
 
-    // PDF Generation State
-    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-    const [configTab, setConfigTab] = useState<'NOMENCLATURA' | 'OBSERVACOES' | 'VALORES' | 'AGRUPAMENTO'>('NOMENCLATURA');
-    const [pdfCompanyNameType, setPdfCompanyNameType] = useState<'NOME' | 'RAZAO_SOCIAL' | 'NOME_FANTASIA'>('NOME');
-    const [pdfGroupItems, setPdfGroupItems] = useState(true);
-
-    const [pdfModuleObservations, setPdfModuleObservations] = useState<Record<string, string>>({});
-    const [pdfModuleTotals, setPdfModuleTotals] = useState<Record<string, boolean>>({});
-
-    const [pdfShowItemObservations, setPdfShowItemObservations] = useState(false);
+    // PDF Generation State (Moved up)
+    // PDF Generation State (Declarations moved up)
 
 
 
-    // Share Modal State
-    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    // Share Modal State (Declarations moved up)
 
     // New Client/Unit Modal State
     const [modalTab, setModalTab] = useState<'client' | 'unit'>('client');
@@ -1052,7 +1058,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                                                 isManualPrice: false
                                                             });
                                                         }}
-                                                        className="p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors flex justify-between items-center group"
+                                                        className="p-2.5 rounded-2xl border border-neutral-200 dark:border-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors flex justify-between items-center group"
                                                     >
                                                         <div className="flex-1 min-w-0 mr-2">
                                                             <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200 block truncate">{proc.nome}</span>
@@ -1075,7 +1081,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                             <ArrowLeft size={12} /> Voltar
                                         </button>
 
-                                        <div className="bg-stone-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-neutral-200 dark:border-white/5">
+                                        <div className="bg-stone-50 dark:bg-zinc-900/50 p-3 rounded-2xl border border-neutral-200 dark:border-white/5">
                                             <h3 className="font-bold text-sm mb-0.5 text-zinc-900 dark:text-white leading-tight">{selectedProcedure.nome}</h3>
                                         </div>
 
@@ -1111,7 +1117,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                         <button
                                             onClick={handleAddItem}
                                             disabled={!selectedProcedure || isSavingNewItem}
-                                            className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transition-all active:scale-95 mt-2"
+                                            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transition-all active:scale-95 mt-2"
                                         >
                                             {isSavingNewItem ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
                                             <span>Adicionar</span>
@@ -1509,15 +1515,15 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             {/* Doc Seg Modal (Individual) */}
             {
                 isDocSegModalOpen && docSegItem && (
-                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
-                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
+                    <div className="fixed inset-0 z-[70] grid place-items-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh] animate-scale-in">
+                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
                                 <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Gerar Documento de Segurança</h3>
                                 <button onClick={() => setIsDocSegModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-4">
+                            <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                                     Para aprovar o item <span className="font-bold text-zinc-800 dark:text-white">{docSegItem.procedimento.nome}</span>, é necessário gerar o documento de segurança.
                                 </p>
@@ -1545,7 +1551,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                     />
                                 </div>
                             </div>
-                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 flex-wrap">
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 flex-wrap shrink-0">
                                 <button
                                     onClick={() => setIsDocSegModalOpen(false)}
                                     className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
@@ -1575,15 +1581,15 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             {/* Observation Modal */}
             {
                 isObservationModalOpen && observationItem && (
-                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10">
-                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center">
+                    <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh] animate-scale-in">
+                            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
                                 <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Observação do Item</h3>
                                 <button onClick={() => setIsObservationModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-4">
+                            <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                                     Adicionar observação para <span className="font-bold text-zinc-800 dark:text-white">{observationItem.procedimento.nome}</span>.
                                 </p>
@@ -1591,11 +1597,11 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                     value={observationText}
                                     onChange={(e) => setObservationText(e.target.value)}
                                     placeholder="Escreva sua observação aqui..."
-                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[100px] dark:text-white"
+                                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 rounded-2xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all min-h-[150px] dark:text-white"
                                     autoFocus
                                 />
                             </div>
-                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3">
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-neutral-100 dark:border-white/5 flex justify-end gap-3 shrink-0">
                                 <button
                                     onClick={() => setIsObservationModalOpen(false)}
                                     className="px-4 py-2 rounded-lg text-zinc-600 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
@@ -1618,8 +1624,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             {/* PDF Config Modal */}
             {
                 isConfigModalOpen && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh]">
+                    <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh] animate-scale-in">
                             <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
                                 <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Configuração do Relatório PDF</h3>
                                 <button onClick={() => setIsConfigModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
@@ -1831,8 +1837,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             {/* Deadline Configuration Modal */}
             {
                 isDeadlineModalOpen && createPortal(
-                    <div className="fixed inset-0 z-[110] flex justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                        <div className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh] my-auto">
+                    <div className="fixed inset-0 z-[100] grid place-items-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh]">
                             <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center shrink-0">
                                 <div>
                                     <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
@@ -1908,8 +1914,8 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             {/* Share Modal */}
             {
                 isShareModalOpen && createPortal(
-                    <div className="fixed inset-0 z-[100] flex justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 my-auto">
+                    <div className="fixed inset-0 z-[110] grid place-items-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-neutral-100 dark:border-zinc-800 flex flex-col max-h-[90vh]">
                             <div className="p-4 border-b border-neutral-100 dark:border-zinc-800 flex justify-between items-center">
                                 <h3 className="font-bold text-lg text-zinc-900 dark:text-white">Compartilhar Proposta</h3>
                                 <button onClick={() => setIsShareModalOpen(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
@@ -1958,9 +1964,9 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
             }
             {
                 isBulkDocSegModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
-                            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50">
+                    <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh] animate-scale-in">
+                            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 shrink-0">
                                 <h3 className="font-bold text-lg text-zinc-900 dark:text-white flex items-center gap-2">
                                     <Layers size={20} className="text-blue-500" />
                                     Aprovar Proposta
@@ -1970,7 +1976,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                 </button>
                             </div>
 
-                            <div className="p-6 space-y-4">
+                            <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm border border-blue-200 dark:border-blue-800/50">
                                     <div className="font-semibold flex items-center gap-2 mb-1">
                                         <Info size={16} />
@@ -2015,7 +2021,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                 </div>
                             </div>
 
-                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0">
                                 <button
                                     onClick={() => setIsBulkDocSegModalOpen(false)}
                                     className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
@@ -2045,19 +2051,21 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                 )
             }
 
-            {isPdfEditorOpen && (
-                <PdfTextEditorModal
-                    isOpen={isPdfEditorOpen}
-                    onClose={() => setIsPdfEditorOpen(false)}
-                    onSave={async (newTexts) => {
-                        await updateProposalPdfConfig(proposal.id, newTexts);
-                        onUpdate();
-                        setIsPdfEditorOpen(false);
-                    }}
-                    initialTexts={mergedPdfTexts}
-                    defaultTexts={pdfTexts}
-                />
-            )}
+            {
+                isPdfEditorOpen && (
+                    <PdfTextEditorModal
+                        isOpen={isPdfEditorOpen}
+                        onClose={() => setIsPdfEditorOpen(false)}
+                        onSave={async (newTexts) => {
+                            await updateProposalPdfConfig(proposal.id, newTexts);
+                            onUpdate();
+                            setIsPdfEditorOpen(false);
+                        }}
+                        initialTexts={mergedPdfTexts}
+                        defaultTexts={pdfTexts}
+                    />
+                )
+            }
 
         </div >
     );

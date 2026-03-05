@@ -135,6 +135,19 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     load();
   }, []);
 
+  // Bloqueio de scroll global quando modais estão abertos
+  useEffect(() => {
+    const isAnyModalOpen = isCreatingClient || isCreatingProcedure || showModalityConfirmation.show || isTextImportOpen || submitting;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isCreatingClient, isCreatingProcedure, showModalityConfirmation.show, isTextImportOpen, submitting]);
+
   // Persistence Effect
   useEffect(() => {
     if (!loading) {
@@ -831,35 +844,43 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       />
 
       {isCreatingClient && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-visible border border-zinc-200 dark:border-zinc-800 animate-scale-in flex flex-col max-h-[90vh] min-h-[600px]">
-            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50 rounded-t-2xl">
-              <h3 className="font-bold text-zinc-800 dark:text-white">Gerenciar Cadastro</h3>
-              <button onClick={() => setIsCreatingClient(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
+        <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh] animate-scale-in">
+            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Gerenciar Cadastro</h3>
+              <button onClick={() => setIsCreatingClient(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="px-4 pt-4 flex gap-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex border-b border-neutral-100 dark:border-white/5 shrink-0">
               <button
                 onClick={() => setModalTab('client')}
                 className={cn(
-                  "flex-1 pb-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors",
-                  modalTab === 'client' ? "border-blue-500 text-blue-600 dark:text-blue-400" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                  "flex-1 py-3 text-sm font-semibold transition-colors relative",
+                  modalTab === 'client' ? "text-blue-600 dark:text-blue-400" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                 )}
               >
-                <User size={16} /> Novo Cliente
+                <div className="flex items-center justify-center gap-2">
+                  <User size={16} /> Novo Cliente
+                </div>
+                {modalTab === 'client' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
               </button>
               <button
                 onClick={() => setModalTab('unit')}
                 className={cn(
-                  "flex-1 pb-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors",
-                  modalTab === 'unit' ? "border-blue-500 text-blue-600 dark:text-blue-400" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                  "flex-1 py-3 text-sm font-semibold transition-colors relative",
+                  modalTab === 'unit' ? "text-blue-600 dark:text-blue-400" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                 )}
               >
-                <Building2 size={16} /> Nova Unidade
+                <div className="flex items-center justify-center gap-2">
+                  <Building2 size={16} /> Nova Unidade
+                </div>
+                {modalTab === 'unit' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
               </button>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
               {modalTab === 'client' ? (
                 <>
                   <div>
@@ -1026,13 +1047,15 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       )}
 
       {isCreatingProcedure && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
-            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/50">
-              <h3 className="font-bold text-zinc-800 dark:text-white">Novo Procedimento</h3>
-              <button onClick={() => setIsCreatingProcedure(false)} className="p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500"><X size={18} /></button>
+        <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-white/10 flex flex-col max-h-[90vh] animate-scale-in">
+            <div className="p-4 border-b border-neutral-100 dark:border-white/5 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-lg text-zinc-800 dark:text-white">Novo Procedimento</h3>
+              <button onClick={() => setIsCreatingProcedure(false)} className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                <X size={20} />
+              </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
               <div>
                 <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
                 <input
@@ -1088,8 +1111,8 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
       }
 
       {showModalityConfirmation.show && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-scale-in">
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-neutral-200 dark:border-white/10 animate-scale-in">
             <div className="p-6 text-center">
               <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 mx-auto mb-4">
                 <Tag size={24} />
