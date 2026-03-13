@@ -177,15 +177,16 @@ export const Avatar: React.FC<{ src: string; alt: string }> = ({ src, alt }) => 
   </div>
 );
 import { Client, Unit } from '../types';
-import { Plus, Check, ChevronDown, User, Building2 } from 'lucide-react';
+import { Plus, Check, ChevronDown, User, Building2, Edit2 } from 'lucide-react';
 
 export const ClientSelector: React.FC<{
   clients: Client[];
   selectedUnitId?: number | null;
   onSelect: (clientId: string, unitId: number) => void;
   onCreateNew: () => void;
+  onEdit?: (clientId: string, unitId: number) => void;
   className?: string;
-}> = ({ clients, selectedUnitId, onSelect, onCreateNew, className }) => {
+}> = ({ clients, selectedUnitId, onSelect, onCreateNew, onEdit, className }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -270,7 +271,7 @@ export const ClientSelector: React.FC<{
               </div>
             )}
             {filteredUnits.map(unit => (
-              <button
+              <div
                 key={unit.id}
                 onClick={() => {
                   onSelect(unit.clientId, unit.id);
@@ -278,13 +279,13 @@ export const ClientSelector: React.FC<{
                   setSearch('');
                 }}
                 className={cn(
-                  "w-full text-left px-3 py-3 rounded-xl flex items-center justify-between group transition-all",
+                  "w-full text-left px-3 py-3 rounded-xl flex items-center justify-between group transition-all cursor-pointer",
                   selectedUnitId === unit.id
                     ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium"
                     : "hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
                 )}
               >
-                <div className="overflow-hidden">
+                <div className="overflow-hidden flex-1">
                   <p className="truncate text-sm flex items-center gap-2">
                     <span className="font-semibold text-zinc-900 dark:text-white">{unit.nome_unidade}</span>
                   </p>
@@ -293,8 +294,23 @@ export const ClientSelector: React.FC<{
                     {unit.clientName}
                   </p>
                 </div>
-                {selectedUnitId === unit.id && <Check size={16} className="text-blue-600 dark:text-blue-400" />}
-              </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {onEdit && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(unit.clientId, unit.id);
+                        setIsOpen(false);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-blue-500 transition-colors"
+                      title="Editar Unidade e Cliente"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                  )}
+                  {selectedUnitId === unit.id && <Check size={16} className="text-blue-600 dark:text-blue-400" />}
+                </div>
+              </div>
             ))}
           </div>
 
