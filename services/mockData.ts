@@ -43,7 +43,7 @@ export interface PdfTexts {
   groupItemsInPdf?: boolean;
 }
 
-// --- Interfaces for Context ---
+// --- Interfaces for Context ----
 export interface CatalogContext {
   modulos: Modulo[];
   categorias: Categoria[];
