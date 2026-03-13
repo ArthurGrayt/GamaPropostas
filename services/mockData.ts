@@ -43,7 +43,7 @@ export interface PdfTexts {
   groupItemsInPdf?: boolean;
 }
 
-// --- Interfaces for Context ----
+// --- Interfaces for Context ---
 export interface CatalogContext {
   modulos: Modulo[];
   categorias: Categoria[];
@@ -1211,4 +1211,3 @@ export const getCollaboratorCountByUnit = async (unitId: number): Promise<number
     console.error('Exceção ao contar colaboradores:', err);
     return 0;
   }
-};
