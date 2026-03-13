@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// --- Glass Card ---
+// --- Glass Card ----
 // Uses backdrop-blur and semi-transparent backgrounds to simulate frosted glass
 export const GlassCard: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void }> = ({
   children, className, onClick
