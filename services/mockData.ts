@@ -1067,6 +1067,54 @@ export const updateClientModality = async (clientId: string, modality: string): 
   }
 };
 
+export const updateClient = async (
+  clientId: string,
+  data: { nomeFantasia?: string; razaoSocial?: string; email?: string; phone?: string; cnpj?: string }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const payload: any = {};
+    if (data.nomeFantasia !== undefined) payload.nome_fantasia = data.nomeFantasia;
+    if (data.razaoSocial !== undefined) payload.razao_social = data.razaoSocial;
+    if (data.email !== undefined) payload.email = data.email;
+    if (data.phone !== undefined) payload.telefone = data.phone;
+    if (data.cnpj !== undefined) payload.cnpj = data.cnpj;
+
+    const { error } = await supabase
+      .from('clientes')
+      .update(payload)
+      .eq('id', clientId);
+
+    if (error) throw error;
+    await logAction('UPDATE', `Atualizou dados do cliente #${clientId}`, { client_id: clientId, ...payload });
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error updating client:", e.message);
+    return { success: false, error: e.message };
+  }
+};
+
+export const updateUnit = async (
+  unitId: number,
+  data: { name?: string }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const payload: any = {};
+    if (data.name !== undefined) payload.nome_unidade = data.name;
+
+    const { error } = await supabase
+      .from('unidades')
+      .update(payload)
+      .eq('id', unitId);
+
+    if (error) throw error;
+    await logAction('UPDATE', `Atualizou dados da unidade #${unitId}`, { unit_id: unitId, ...payload });
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error updating unit:", e.message);
+    return { success: false, error: e.message };
+  }
+};
+
 // --- Global PDF Settings Persistence ---
 
 export const fetchPdfGlobalConfig = async (): Promise<PdfTexts | null> => {
