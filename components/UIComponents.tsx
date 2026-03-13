@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// --- Glass Card ----
+// --- Glass Card ---
 // Uses backdrop-blur and semi-transparent backgrounds to simulate frosted glass
 export const GlassCard: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void }> = ({
   children, className, onClick
@@ -177,6 +177,7 @@ export const Avatar: React.FC<{ src: string; alt: string }> = ({ src, alt }) => 
   </div>
 );
 import { Client, Unit } from '../types';
+import { Plus, Check, ChevronDown, User, Building2 } from 'lucide-react';
 import { Plus, Check, ChevronDown, User, Building2, Edit2 } from 'lucide-react';
 
 export const ClientSelector: React.FC<{
@@ -186,6 +187,7 @@ export const ClientSelector: React.FC<{
   onCreateNew: () => void;
   onEdit?: (clientId: string, unitId: number) => void;
   className?: string;
+}> = ({ clients, selectedUnitId, onSelect, onCreateNew, className }) => {
 }> = ({ clients, selectedUnitId, onSelect, onCreateNew, onEdit, className }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -271,6 +273,7 @@ export const ClientSelector: React.FC<{
               </div>
             )}
             {filteredUnits.map(unit => (
+              <button
               <div
                 key={unit.id}
                 onClick={() => {
@@ -279,12 +282,14 @@ export const ClientSelector: React.FC<{
                   setSearch('');
                 }}
                 className={cn(
+                  "w-full text-left px-3 py-3 rounded-xl flex items-center justify-between group transition-all",
                   "w-full text-left px-3 py-3 rounded-xl flex items-center justify-between group transition-all cursor-pointer",
                   selectedUnitId === unit.id
                     ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium"
                     : "hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
                 )}
               >
+                <div className="overflow-hidden">
                 <div className="overflow-hidden flex-1">
                   <p className="truncate text-sm flex items-center gap-2">
                     <span className="font-semibold text-zinc-900 dark:text-white">{unit.nome_unidade}</span>
@@ -294,6 +299,8 @@ export const ClientSelector: React.FC<{
                     {unit.clientName}
                   </p>
                 </div>
+                {selectedUnitId === unit.id && <Check size={16} className="text-blue-600 dark:text-blue-400" />}
+              </button>
                 <div className="flex items-center gap-2 shrink-0">
                   {onEdit && (
                     <button
@@ -330,4 +337,3 @@ export const ClientSelector: React.FC<{
       )}
     </div>
   );
-};
