@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit, getCollaboratorCountByUnit } from '../services/mockData';
+import { CatalogContext, fetchCatalogData, createProposal, createNewClient, createProcedure, updateClientModality, createUnit, getCollaboratorCountByUnit, updateClient, updateUnit } from '../services/mockData';
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
 import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User, FileText, AlertTriangle, Users } from 'lucide-react';
 import { TextImportModal } from './TextImportModal';
@@ -93,6 +93,12 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   const [cartActiveTab, setCartActiveTab] = useState<'itens' | 'prazos'>('itens');
   const [cartSortOrder, setCartSortOrder] = useState<CartSortOrder>('RECENT');
   const [isTextImportOpen, setIsTextImportOpen] = useState(false);
+  
+  // Edit Client/Unit State
+  const [isEditingClientUnit, setIsEditingClientUnit] = useState(false);
+  const [editingClientData, setEditingClientData] = useState({ id: '', nomeFantasia: '', razaoSocial: '' });
+  const [editingUnitData, setEditingUnitData] = useState({ id: 0, name: '' });
+  const [isUpdatingClientUnit, setIsUpdatingClientUnit] = useState(false);
 
   // Estado do modal de confirmação de colaboradores (Psicossocial/Psicológica)
   const [isCollabWarningOpen, setIsCollabWarningOpen] = useState(false);
@@ -151,7 +157,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
 
   // Bloqueio de scroll global quando modais estão abertos
   useEffect(() => {
-    const isAnyModalOpen = isCreatingClient || isCreatingProcedure || showModalityConfirmation.show || isTextImportOpen || submitting || isCollabWarningOpen;
+    const isAnyModalOpen = isCreatingClient || isCreatingProcedure || showModalityConfirmation.show || isTextImportOpen || submitting || isCollabWarningOpen || isEditingClientUnit;
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -160,7 +166,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isCreatingClient, isCreatingProcedure, showModalityConfirmation.show, isTextImportOpen, submitting, isCollabWarningOpen]);
+  }, [isCreatingClient, isCreatingProcedure, showModalityConfirmation.show, isTextImportOpen, submitting, isCollabWarningOpen, isEditingClientUnit]);
 
   // Busca a contagem de colaboradores quando a unidade selecionada muda
   useEffect(() => {
@@ -641,6 +647,50 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
     }
   };
 
+  const handleEditClientUnit = (clientId: string, unitId: number) => {
+    const client = catalog.clientes.find(c => String(c.id) === clientId);
+    const unit = catalog.unidades.find(u => u.id === unitId);
+    
+    if (client && unit) {
+      setEditingClientData({ id: client.id, nomeFantasia: client.nome_fantasia || '', razaoSocial: client.razao_social || '' });
+      setEditingUnitData({ id: unit.id, name: unit.nome_unidade });
+      setIsEditingClientUnit(true);
+    }
+  };
+
+  const handleUpdateClientUnit = async () => {
+    if (!editingUnitData.name.trim()) {
+      alert('O nome da unidade é obrigatório.');
+      return;
+    }
+    if (!editingClientData.nomeFantasia.trim() || !editingClientData.razaoSocial.trim()) {
+      alert('Nome Fantasia e Razão Social são obrigatórios.');
+      return;
+    }
+
+    setIsUpdatingClientUnit(true);
+    
+    const clientRes = await updateClient(editingClientData.id, {
+      nomeFantasia: editingClientData.nomeFantasia,
+      razaoSocial: editingClientData.razaoSocial
+    });
+
+    const unitRes = await updateUnit(editingUnitData.id, {
+      name: editingUnitData.name
+    });
+
+    setIsUpdatingClientUnit(false);
+
+    if (clientRes.success && unitRes.success) {
+      // Refresh catalog
+      const data = await fetchCatalogData();
+      setCatalog(data);
+      setIsEditingClientUnit(false);
+    } else {
+      alert('Erro ao atualizar: ' + (clientRes.error || unitRes.error || 'Erro desconhecido'));
+    }
+  };
+
   const PriceMenu: React.FC<{ proc: Procedimento, menu: 'main' | 'sidebar' }> = ({ proc, menu }) => {
     const tiers = (Object.keys(priceTiers) as PriceTierKey[]).filter(key => proc[key] != null);
     return (
@@ -689,6 +739,7 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
               selectedUnitId={selectedUnitId}
               onSelect={(cid, uid) => { setSelectedClientId(cid); setSelectedUnitId(uid); }}
               onCreateNew={() => setIsCreatingClient(true)}
+              onEdit={handleEditClientUnit}
               className="flex-1"
             />
           </div>
@@ -1295,6 +1346,90 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Edição de Unidade/Cliente */}
+      {isEditingClientUnit && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-zinc-900 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-white/20 animate-scale-in">
+            <div className="p-6 border-b dark:border-white/10 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Edit2 size={20} /></div>
+                <div>
+                  <h3 className="font-bold text-xl">Editar Unidade e Cliente</h3>
+                  <p className="text-xs text-zinc-500">Atualize as informações básicas</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEditingClientUnit(false)} className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Nome da Unidade</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="text"
+                      value={editingUnitData.name}
+                      onChange={(e) => setEditingUnitData({ ...editingUnitData, name: e.target.value })}
+                      placeholder="Nome da Unidade"
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-white/5 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-100 dark:bg-white/5 my-2"></div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Nome Fantasia do Cliente</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="text"
+                      value={editingClientData.nomeFantasia}
+                      onChange={(e) => setEditingClientData({ ...editingClientData, nomeFantasia: e.target.value })}
+                      placeholder="Nome Fantasia"
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-white/5 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Razão Social do Cliente</label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="text"
+                      value={editingClientData.razaoSocial}
+                      onChange={(e) => setEditingClientData({ ...editingClientData, razaoSocial: e.target.value })}
+                      placeholder="Razão Social"
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-white/5 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-t dark:border-white/10 flex gap-3">
+              <button
+                onClick={() => setIsEditingClientUnit(false)}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleUpdateClientUnit}
+                disabled={isUpdatingClientUnit}
+                className="flex-1 py-3 px-4 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+              >
+                {isUpdatingClientUnit ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>
