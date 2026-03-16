@@ -7,6 +7,7 @@ import { ArrowLeft, Box, CheckCircle, XCircle, Clock, Package, ChevronDown, Aler
 import { updateProposalStatus, updateItemStatus, updateItemDetails, deleteProposal, deleteItem, addItemToProposal, fetchCatalogData, CatalogContext, updateProposalClient, createNewClient, createDocSeg, createUnit, PdfTexts, updateProposalPdfConfig } from '../services/mockData';
 import { generateProposalPdf } from '../services/pdfGenerator';
 import { PdfTextEditorModal } from './PdfTextEditorModal';
+import { formatCNPJ, validateCNPJ } from '../services/utils';
 
 interface Props {
     proposal: EnrichedProposal;
@@ -138,7 +139,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     const [selectedUnitId, setSelectedUnitId] = useState<number | undefined>(proposal.unidade_id);
     const [isSavingClient, setIsSavingClient] = useState(false);
     const [isCreatingClient, setIsCreatingClient] = useState(false);
-    const [newClientData, setNewClientData] = useState({ name: '', email: '', phone: '' });
+    const [newClientData, setNewClientData] = useState({ nomeFantasia: '', razaoSocial: '', email: '', phone: '', cnpj: '' });
     const [isSavingNewClient, setIsSavingNewClient] = useState(false);
 
     // Observation Modal State
@@ -684,24 +685,31 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
     };
 
     const handleCreateClient = async () => {
-        if (!newClientData.name.trim()) {
-            alert('O nome do cliente é obrigatório.');
+        if (!newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim() || !newClientData.cnpj.trim()) {
+            alert('Nome Fantasia, Razão Social e CNPJ são obrigatórios.');
+            return;
+        }
+
+        if (!validateCNPJ(newClientData.cnpj)) {
+            alert('Por favor, informe um CNPJ válido.');
             return;
         }
 
         setIsSavingNewClient(true);
         // 1. Create Client
         const clientResult = await createNewClient(
-            newClientData.name,
+            newClientData.nomeFantasia,
+            newClientData.razaoSocial,
             newClientData.email,
             newClientData.phone,
+            newClientData.cnpj,
             proposal.id // We still pass proposal ID to link it immediately if possible
         );
 
         if (clientResult.success && clientResult.data) {
             // 2. Create Default Unit (Copying logic from ProposalCreate to be consistent)
-            // Use the client name (or fancy name if we had it separately, but here we just have name) as default unit name
-            const unitResult = await createUnit(newClientData.name, clientResult.data.id);
+            // Use the client nomeFantasia as default unit name
+            const unitResult = await createUnit(newClientData.nomeFantasia, clientResult.data.id);
 
             setIsSavingNewClient(false);
 
@@ -721,7 +729,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
 
                 // Close modal
                 setIsCreatingClient(false);
-                setNewClientData({ name: '', email: '', phone: '' });
+                setNewClientData({ nomeFantasia: '', razaoSocial: '', email: '', phone: '', cnpj: '' });
 
                 onUpdate();
                 setIsEditingClient(false);
@@ -1391,15 +1399,36 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                             {modalTab === 'client' ? (
                                 <>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome *</label>
+                                     <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Nome Fantasia *</label>
                                         <input
                                             type="text"
-                                            value={newClientData.name}
-                                            onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                                            value={newClientData.nomeFantasia}
+                                            onChange={e => setNewClientData({ ...newClientData, nomeFantasia: e.target.value })}
                                             className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
-                                            placeholder="Nome do Cliente ou Empresa"
+                                            placeholder="Nome Fantasia"
                                             autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">Razão Social *</label>
+                                        <input
+                                            type="text"
+                                            value={newClientData.razaoSocial}
+                                            onChange={e => setNewClientData({ ...newClientData, razaoSocial: e.target.value })}
+                                            className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            placeholder="Razão Social Ltda"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">CNPJ *</label>
+                                        <input
+                                            type="text"
+                                            value={newClientData.cnpj}
+                                            onChange={e => setNewClientData({ ...newClientData, cnpj: formatCNPJ(e.target.value) })}
+                                            maxLength={18}
+                                            className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            placeholder="00.000.000/0000-00"
                                         />
                                     </div>
                                     <div>
@@ -1424,7 +1453,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                     </div>
                                     <button
                                         onClick={handleCreateClient}
-                                        disabled={isSavingNewClient || !newClientData.name.trim()}
+                                        disabled={isSavingNewClient || !newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim() || !newClientData.cnpj.trim()}
                                         className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
                                     >
                                         {isSavingNewClient ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
@@ -1476,7 +1505,7 @@ export const ProposalDetail: React.FC<Props> = ({ proposal, onBack, onUpdate, pd
                                                                 <button
                                                                     onClick={() => {
                                                                         // Switch to create client tab, setting name
-                                                                        setNewClientData(prev => ({ ...prev, name: companySearchQuery }));
+                                                                        setNewClientData(prev => ({ ...prev, nomeFantasia: companySearchQuery }));
                                                                         setModalTab('client');
                                                                         setIsCompanyDropdownOpen(false);
                                                                     }}

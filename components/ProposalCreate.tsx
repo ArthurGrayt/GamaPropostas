@@ -5,6 +5,7 @@ import { CatalogContext, fetchCatalogData, createProposal, createNewClient, crea
 import { GlassCard, SearchBar, FilterPill, cn, ClientSelector } from './UIComponents';
 import { ArrowLeft, Plus, Minus, Layers, List, Loader2, Save, X, ShoppingCart, Tag, Edit2, Check, X as XIcon, CalendarDays, CalendarPlus, ListTodo, CalendarClock, ChevronRight, Trash, Building2, User, FileText, AlertTriangle, Users } from 'lucide-react';
 import { TextImportModal } from './TextImportModal';
+import { formatCNPJ, validateCNPJ } from '../services/utils';
 import { Modulo, Categoria, Procedimento, Client } from '../types';
 
 interface Props {
@@ -519,8 +520,15 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
   };
 
   const handleCreateClient = async () => {
-    if (!newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim()) {
-      alert('Nome Fantasia e Razão Social são obrigatórios.');
+    // Verifica se os campos obrigatórios estão preenchidos
+    if (!newClientData.nomeFantasia.trim() || !newClientData.razaoSocial.trim() || !newClientData.cnpj.trim()) {
+      alert('Nome Fantasia, Razão Social e CNPJ são obrigatórios.');
+      return;
+    }
+
+    // Valida o formato e os dígitos do CNPJ
+    if (!validateCNPJ(newClientData.cnpj)) {
+      alert('Por favor, informe um CNPJ válido.');
       return;
     }
 
@@ -1001,11 +1009,12 @@ export const ProposalCreate: React.FC<Props> = ({ onBack, onSuccess }) => {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">CNPJ</label>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wider">CNPJ *</label>
                     <input
                       type="text"
                       value={newClientData.cnpj}
-                      onChange={e => setNewClientData({ ...newClientData, cnpj: e.target.value })}
+                      onChange={e => setNewClientData({ ...newClientData, cnpj: formatCNPJ(e.target.value) })}
+                      maxLength={18}
                       className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-blue-500/50 outline-none"
                       placeholder="00.000.000/0000-00"
                     />
